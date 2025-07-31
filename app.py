@@ -312,7 +312,7 @@ class ProjectFinancingCalculator:
                 'total_interest': option1_total_interest_lakh,
                 'effective_interest': option1_effective_interest_lakh,
                 'net_outflow': option1_net_outflow,
-                'capital_used': inputs['own_capital'] # This is capital used directly for project
+                'capital_used': inputs['own_capital'] # This is Own Capital Used for Project
             },
             'option2': {
                 'loan_amount': option2_loan_amount_lakh,
@@ -324,11 +324,11 @@ class ProjectFinancingCalculator:
                 'investment_gain': investment_gain_option2,
                 'post_tax_gain': post_tax_gain_option2,
                 'net_outflow': option2_net_outflow,
-                'capital_used': 0, # No own capital used directly for project
+                'capital_used': 0, # No own Own Capital Used for Project
                 'capital_invested': inputs['own_capital'] # All own capital is invested
             },
             'option3': {
-                'capital_used': option3_capital_used, # Capital used directly for project
+                'capital_used': option3_capital_used, # Own Capital Used for Project
                 'loan_amount': option3_loan_amount_lakh,
                 'emi': option3_emi,
                 'total_payment': option3_total_payment,
@@ -401,7 +401,7 @@ class ProjectFinancingCalculator:
         st.markdown("#### 📈 Financing Options Comparison")
         comparison_data = {
             'Metric': [
-                'Capital Used Directly for Project', # NEW ROW
+                'Own Capital Used for Project', # NEW ROW
                 'Own Capital Invested', # NEW ROW
                 'Loan Amount',
                 'Monthly EMI',
@@ -628,19 +628,19 @@ class ProjectFinancingCalculator:
                     'Tenure (years)', 'Investment Type', 'Investment Return (%)', 'Tax Rate (%)',
                     'Custom Capital Contribution (Option 3) (₹ lakh)', # Added here as well for consistency
                     '', 'OPTION 1 - Use Own Capital',
-                    'Capital Used Directly for Project (₹ lakh)', # NEW
+                    'Own Capital Used for Project (₹ lakh)', # NEW
                     'Own Capital Invested (₹ lakh)', # NEW
                     'Loan Amount (₹ lakh)', 'Monthly EMI (₹)',
                     'Gross Total Interest (₹ lakh)', 'Effective Total Interest (After Tax) (₹ lakh)',
                     'Net Cost (₹ lakh)',
                     '', 'OPTION 2 - Invest + Loan',
-                    'Capital Used Directly for Project (₹ lakh)', # NEW
+                    'Own Capital Used for Project (₹ lakh)', # NEW
                     'Own Capital Invested (₹ lakh)', # NEW
                     'Loan Amount (₹ lakh)', 'Monthly EMI (₹)',
                     'Gross Total Interest (₹ lakh)', 'Effective Total Interest (After Tax) (₹ lakh)',
                     'Investment Maturity (₹ lakh)', 'Post-tax Gain (₹ lakh)', 'Net Cost (₹ lakh)',
                     '', 'OPTION 3 - Custom Capital Contribution + Loan',
-                    'Capital Used Directly for Project (₹ lakh)', # NEW
+                    'Own Capital Used for Project (₹ lakh)', # NEW
                     'Own Capital Invested (₹ lakh)', # NEW
                     'Loan Amount (₹ lakh)',
                     'Monthly EMI (₹)',
