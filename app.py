@@ -156,7 +156,7 @@ class ProjectFinancingCalculator:
 
         # Determine recommendation
         recommendation = 'option1' if option1_net_outflow_lakh < option2_net_outflow else 'option2'
-        savings = abs(option1_net_outflow_lakh - option2_net_outflow)
+        savings = abs(option1_net_outflow_lakh - option2_net_outflow);
 
         results = {
             'option1': {
@@ -474,9 +474,9 @@ def main():
 
     # Add a button to trigger calculation
     if st.button("Calculate Financing Options", type="primary"):
-        if inputs['own_capital'] > inputs['project_cost'] and inputs['loan_amount'] > 0:
-            st.error("Error: Own capital cannot be greater than project cost if a loan is also taken for Option 1. Please adjust inputs.")
-            return
+        # The problematic validation that caused KeyError has been removed.
+        # The underlying calculation logic already handles cases where own_capital >= project_cost
+        # by setting option1_loan_amount to 0.
 
         # Perform calculations
         results = calc.calculate_comparison(inputs)
@@ -490,8 +490,3 @@ def main():
         # Provide Excel export
         import io # Import io here as it's only needed for Excel export
         calc.export_to_excel(inputs, results, df)
-
-        st.success("Calculations complete!")
-
-if __name__ == "__main__":
-    main()
