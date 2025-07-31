@@ -214,6 +214,9 @@ class ProjectFinancingCalculator:
 
         # NEW NET COST DEFINITION: Project Cost + Effective Total Interest - Post-Tax Investment Gains (0 for Option 1)
         option1_net_outflow = inputs['project_cost'] + option1_effective_interest_lakh
+        
+        # NEW: Total Investment (Gross Cash Outflow)
+        option1_total_investment_gross = (option1_total_payment / 100000) + inputs['own_capital']
 
 
         # Option 2: Invest own capital + take full loan
@@ -240,6 +243,9 @@ class ProjectFinancingCalculator:
 
         # NEW NET COST DEFINITION: Project Cost + Effective Total Interest - Post-Tax Investment Gains
         option2_net_outflow = inputs['project_cost'] + (option2_effective_interest / 100000) - post_tax_gain_option2
+
+        # NEW: Total Investment (Gross Cash Outflow)
+        option2_total_investment_gross = (option2_total_payment / 100000) + inputs['own_capital']
 
 
         # Option 3: Custom Capital Contribution + Loan
@@ -279,6 +285,10 @@ class ProjectFinancingCalculator:
         # NEW NET COST DEFINITION: Project Cost + Effective Total Interest - Post-Tax Investment Gains
         option3_net_outflow = inputs['project_cost'] + option3_effective_interest_lakh - option3_post_tax_gain
 
+        # NEW: Total Investment (Gross Cash Outflow)
+        option3_total_investment_gross = (option3_total_payment / 100000) + inputs['own_capital']
+
+
         # Calculate annualized effective rates for display
         # Effective Loan Rate (Annualized)
         effective_loan_rate_annual = inputs['loan_rate']
@@ -288,8 +298,10 @@ class ProjectFinancingCalculator:
         # Effective Investment Return (Annualized Post-Tax CAGR)
         effective_investment_return_annual = 0
         if inputs['own_capital'] > 0 and inputs['loan_tenure'] > 0:
-            # Calculate CAGR for Option 2's investment
-            effective_investment_return_annual = ( (investment_maturity_value_option2 / inputs['own_capital'])**(1/inputs['loan_tenure']) - 1 ) * 100
+            # Calculate CAGR for Option 2's investment (using post-tax maturity value)
+            # Ensure investment_maturity_value_option2 is > 0 to avoid log(0)
+            if investment_maturity_value_option2 > 0:
+                effective_investment_return_annual = ( (investment_maturity_value_option2 / inputs['own_capital'])**(1/inputs['loan_tenure']) - 1 ) * 100
 
 
         # Determine recommendation (now comparing 3 options)
@@ -327,7 +339,8 @@ class ProjectFinancingCalculator:
                 'total_interest': option1_total_interest_lakh,
                 'effective_interest': option1_effective_interest_lakh,
                 'net_outflow': option1_net_outflow,
-                'capital_used': inputs['own_capital'] # This is capital used directly for project
+                'capital_used': inputs['own_capital'], # This is capital used directly for project
+                'total_investment_gross': option1_total_investment_gross # NEW
             },
             'option2': {
                 'loan_amount': option2_loan_amount_lakh,
@@ -340,7 +353,8 @@ class ProjectFinancingCalculator:
                 'post_tax_gain': post_tax_gain_option2,
                 'net_outflow': option2_net_outflow,
                 'capital_used': 0.0, # No own capital used directly for project
-                'capital_invested': inputs['own_capital'] # All own capital is invested
+                'capital_invested': inputs['own_capital'], # All own capital is invested
+                'total_investment_gross': option2_total_investment_gross # NEW
             },
             'option3': {
                 'capital_used': option3_capital_used, # Capital used directly for project
@@ -353,13 +367,14 @@ class ProjectFinancingCalculator:
                 'investment_maturity': option3_investment_maturity_value,
                 'investment_gain': option3_investment_gain,
                 'post_tax_gain': option3_post_tax_gain,
-                'net_outflow': option3_net_outflow
+                'net_outflow': option3_net_outflow,
+                'total_investment_gross': option3_total_investment_gross # NEW
             },
             'recommendation': recommendation,
             'savings': savings_against_worst,
             'interest_spread': inputs['loan_rate'] - inputs['investment_return'],
-            'effective_loan_rate_annual': effective_loan_rate_annual, # NEW: Annualized
-            'effective_investment_return_annual': effective_investment_return_annual, # NEW: Annualized
+            'effective_loan_rate_annual': effective_loan_rate_annual,
+            'effective_investment_return_annual': effective_investment_return_annual,
             'prepayment_cost': prepayment_cost
         }
         
@@ -425,6 +440,7 @@ class ProjectFinancingCalculator:
                 'Investment Maturity Value (from invested capital)',
                 'Gross Investment Gain (from invested capital)',
                 'Post-Tax Investment Gain (from invested capital)',
+                '**Total Investment (Gross Cash Outflow)**', # NEW COLUMN
                 '**NET COST**'
             ],
             'Option 1: Own Capital + Small Loan': [
@@ -437,6 +453,7 @@ class ProjectFinancingCalculator:
                 "₹0.0 lakh",
                 "₹0.0 lakh",
                 "₹0.0 lakh",
+                f"₹{results['option1']['total_investment_gross']:.2f} lakh", # NEW VALUE
                 f"₹{results['option1']['net_outflow']:.2f} lakh"
             ],
             'Option 2: Invest Capital + Full Loan': [
@@ -449,6 +466,7 @@ class ProjectFinancingCalculator:
                 f"₹{results['option2']['investment_maturity']:.2f} lakh",
                 f"₹{results['option2']['investment_gain']:.2f} lakh",
                 f"₹{results['option2']['post_tax_gain']:.2f} lakh",
+                f"₹{results['option2']['total_investment_gross']:.2f} lakh", # NEW VALUE
                 f"₹{results['option2']['net_outflow']:.2f} lakh"
             ],
             'Option 3: Custom Capital + Loan': [
@@ -461,6 +479,7 @@ class ProjectFinancingCalculator:
                 f"₹{results['option3']['investment_maturity']:.2f} lakh" if results['option3']['remaining_own_capital_invested'] > 0 else "₹0.0 lakh",
                 f"₹{results['option3']['investment_gain']:.2f} lakh" if results['option3']['remaining_own_capital_invested'] > 0 else "₹0.0 lakh",
                 f"₹{results['option3']['post_tax_gain']:.2f} lakh" if results['option3']['remaining_own_capital_invested'] > 0 else "₹0.0 lakh",
+                f"₹{results['option3']['total_investment_gross']:.2f} lakh", # NEW VALUE
                 f"₹{results['option3']['net_outflow']:.2f} lakh"
             ]
         }
@@ -468,7 +487,7 @@ class ProjectFinancingCalculator:
         st.dataframe(comparison_df)
 
         # Net Cost Definition Expander
-        with st.expander("❓ What is 'Net Cost' in this context?"):
+        with st.expander("❓ What are 'Net Cost' and 'Total Investment' in this context?"): # Updated title
             st.markdown("""
             **"Net Cost"** represents your ultimate **out-of-pocket expense to fund the project** over the loan tenure.
             It is calculated as:
@@ -480,6 +499,14 @@ class ProjectFinancingCalculator:
             * **Post-Tax Investment Gains:** Any net profits you earn from investing your own capital (after taxes) are subtracted, as these gains effectively reduce your overall cost.
             
             This metric provides a true bottom-line figure for each financing option, allowing for direct and comparable evaluation of what you *truly spent* to get the project done.
+            
+            ---
+            
+            **"Total Investment (Gross Cash Outflow)"** represents the **total cash flow involved** in financing the project and managing your available capital over the loan tenure.
+            It is calculated as:
+            `Total Investment = Total Loan Payment (Principal + Gross Interest) + Own Capital Available`
+            
+            This figure is typically much higher than "Net Cost" because it does not account for tax benefits on interest or offsetting investment gains. It gives a sense of the gross funds that move through your financing strategy.
             """)
         st.markdown("---")
 
@@ -515,9 +542,9 @@ class ProjectFinancingCalculator:
         
         col_metrics_1, col_metrics_2, col_metrics_3 = st.columns(3)
         with col_metrics_1:
-            st.metric(label="Effective Loan Interest Rate (After Tax)", value=f"{results['effective_loan_rate_annual']:.2f}% p.a.", delta_color="off")
+            st.metric(label="Effective Loan Interest Rate (After Tax) (Annualized)", value=f"{results['effective_loan_rate_annual']:.2f}% p.a.", delta_color="off")
         with col_metrics_2:
-            st.metric(label="Effective Investment Return (After Tax)", value=f"{results['effective_investment_return_annual']:.2f}% p.a.", delta_color="off")
+            st.metric(label="Effective Investment Return (After Tax) (Annualized)", value=f"{results['effective_investment_return_annual']:.2f}% p.a.", delta_color="off")
         with col_metrics_3:
             st.metric(label="Interest Rate Spread (Loan - Investment)", value=f"{results['interest_spread']:.2f}%", delta_color="off")
         
@@ -539,9 +566,7 @@ class ProjectFinancingCalculator:
             st.write(" - **Credit Profile & Leverage:** Assess the impact of increased debt on your company's debt-to-equity ratio, credit rating, and future borrowing capacity. Excessive leverage can affect banking relationships and future funding flexibility.")
             st.write(" - **Regulatory Compliance:** Confirm all documentation (project reports, audited financials) are ready for smooth loan disbursal and subsequent annual reviews to avoid penalties or delays.")
             st.write(" - **Investment Liquidity/Market Risk:** Even 'liquid' investments carry some market risk (e.g., temporary impairment during market freezes). Maintain an emergency buffer in a highly liquid bank account (beyond investment) for immediate needs.")
-
-        with st.expander("Optimization Moves & Additional Value Levers"):
-            st.write(" - **Staggered Drawdown:** Consider phased loan drawdown or capital deployment as per project schedule to optimize interest outflow and minimize idle funds.")
+            st.write(" - **Optimization Moves & Additional Value Levers:** Consider phased loan drawdown or capital deployment as per project schedule to optimize interest outflow and minimize idle funds.")
             st.write(" - **Step-up EMI/SWP Option:** If expecting higher business income post-project commissioning, opt for step-up EMI structure. Alternatively, consider Systematic Withdrawal Plan (SWP) from investments to sync cash flows with project needs.")
             st.write(" - **Insurance:** Insure the principal loan with adequate keyman/credit insurance, especially if individual guarantees are required, to mitigate personal risk.")
             st.write(" - **Renegotiation Flexibility:** Build in terms for possible loan prepayment, refinancing, or top-up without penal costs in your loan agreements.")
@@ -552,7 +577,7 @@ class ProjectFinancingCalculator:
         st.write(f" - **Quantify & Monitor Liquidity:** Always maintain a minimum liquidity threshold (e.g., **₹{inputs['min_liquidity_target']:.1f} lakh** always in instantly-accessible form) to ensure business agility and emergency preparedness.")
         st.write(" - **Dynamic Financial Planning:** Be prepared for faster loan prepayment or capital recycling if the business environment or investment returns shift in future years. Agility is key.")
         st.write(" - **Continuous Benchmarking:** Regularly benchmark your investment returns and borrowing costs against evolving market rates and new reinvestment opportunities to ensure optimal capital allocation.")
-        st.write(" - **Dashboard Monitoring:** Implement and maintain a dynamic dashboard updated for promoters, CFO, and the board on all the above parameters, enabling proactive decision-making.")
+        st.write(" - **Dashboard Monitoring:** Implement and maintain a dynamic dashboard updated for promoters, CFO, and the board on all key financial parameters and risk indicators.")
 
         st.markdown("---")
         st.markdown("### **In short:**")
@@ -663,13 +688,16 @@ class ProjectFinancingCalculator:
                     'Own Capital Invested (₹ lakh)',
                     'Loan Amount (₹ lakh)', 'Monthly EMI (₹)',
                     'Gross Total Interest (₹ lakh)', 'Effective Total Interest (After Tax) (₹ lakh)',
+                    'Total Investment (Gross Cash Outflow) (₹ lakh)', # NEW
                     'Net Cost (₹ lakh)',
                     '', 'OPTION 2 - Invest + Loan',
                     'Capital Used Directly for Project (₹ lakh)',
                     'Own Capital Invested (₹ lakh)',
                     'Loan Amount (₹ lakh)', 'Monthly EMI (₹)',
                     'Gross Total Interest (₹ lakh)', 'Effective Total Interest (After Tax) (₹ lakh)',
-                    'Investment Maturity (₹ lakh)', 'Post-tax Gain (₹ lakh)', 'Net Cost (₹ lakh)',
+                    'Investment Maturity (₹ lakh)', 'Post-tax Gain (₹ lakh)',
+                    'Total Investment (Gross Cash Outflow) (₹ lakh)', # NEW
+                    'Net Cost (₹ lakh)',
                     '', 'OPTION 3 - Custom Capital Contribution + Loan',
                     'Capital Used Directly for Project (₹ lakh)',
                     'Own Capital Invested (₹ lakh)',
@@ -678,6 +706,7 @@ class ProjectFinancingCalculator:
                     'Gross Total Interest (₹ lakh)', 'Effective Total Interest (After Tax) (₹ lakh)',
                     'Investment Maturity (₹ lakh) (Option 3)',
                     'Post-tax Gain (₹ lakh) (Option 3)',
+                    'Total Investment (Gross Cash Outflow) (₹ lakh)', # NEW
                     'Net Cost (₹ lakh) (Option 3)',
                     '', 'Overall Effective Loan Rate (After Tax) (%) (Annualized)', # Updated label
                     'Overall Effective Investment Return (After Tax) (%) (Annualized)', # Updated label
@@ -699,6 +728,7 @@ class ProjectFinancingCalculator:
                     results['option1']['loan_amount'],
                     f"₹{results['option1']['emi']:,.0f}", results['option1']['total_interest'],
                     results['option1']['effective_interest'],
+                    results['option1']['total_investment_gross'], # NEW
                     results['option1']['net_outflow'], '', '',
                     results['option2']['capital_used'],
                     results['option2']['capital_invested'],
@@ -706,6 +736,7 @@ class ProjectFinancingCalculator:
                     f"₹{results['option2']['emi']:,.0f}", results['option2']['total_interest'],
                     results['option2']['effective_interest'],
                     results['option2']['investment_maturity'], results['option2']['post_tax_gain'],
+                    results['option2']['total_investment_gross'], # NEW
                     results['option2']['net_outflow'],
                     '', '',
                     results['option3']['capital_used'],
@@ -716,9 +747,10 @@ class ProjectFinancingCalculator:
                     results['option3']['effective_interest'],
                     results['option3']['investment_maturity'],
                     results['option3']['post_tax_gain'],
+                    results['option3']['total_investment_gross'], # NEW
                     results['option3']['net_outflow'],
-                    '', results['effective_loan_rate_annual'], # Updated to annualized
-                    results['effective_investment_return_annual'], # Updated to annualized
+                    '', results['effective_loan_rate_annual'],
+                    results['effective_investment_return_annual'],
                     results['prepayment_cost'],
                     '',
                     'Option 1' if results['recommendation'] == 'option1' else ('Option 2' if results['recommendation'] == 'option2' else 'Option 3'),
@@ -735,8 +767,13 @@ class ProjectFinancingCalculator:
             inv_df = pd.DataFrame.from_dict(self.investment_options, orient='index')
             inv_df.to_excel(writer, sheet_name='Investment_Options')
 
+            # Ensure all sheets are visible and the first one is active
             if writer.book.sheetnames:
-                writer.book.active = 0
+                for sheet_name in writer.book.sheetnames:
+                    ws = writer.book[sheet_name]
+                    ws.sheet_state = 'visible' # Explicitly set visibility
+                writer.book.active = 0 # Set the first sheet as active
+
         output.seek(0) # Rewind the buffer to the beginning
 
         st.download_button(
@@ -747,7 +784,7 @@ class ProjectFinancingCalculator:
             help="Click to download the detailed financial analysis in Excel format."
         )
 
-    def export_to_csv(self, df, filename='year_wise_analysis.csv', label="Download Year-wise CSV"):
+    def export_to_csv(self, df, filename='analysis_data.csv', label="Download Year-wise CSV"):
         """Export DataFrame to CSV and provide a download button"""
         csv_output = df.to_csv(index=False).encode('utf-8')
         st.download_button(
@@ -755,7 +792,7 @@ class ProjectFinancingCalculator:
             data=csv_output,
             file_name=filename,
             mime="text/csv",
-            key=f"csv_download_{filename}"
+            key=f"csv_download_{filename.replace('.', '_')}" # Ensure unique key
         )
 
     def generate_pdf_report(self, inputs, results, comparison_df, year_wise_df, filename='project_financing_report.pdf'):
@@ -812,13 +849,36 @@ class ProjectFinancingCalculator:
         story.append(Spacer(1, 0.2 * inch))
 
         # Net Cost Definition
-        story.append(Paragraph("What is 'Net Cost' in this context?", styles['h3']))
+        story.append(Paragraph("What are 'Net Cost' and 'Total Investment' in this context?", styles['h3'])) # Updated title
         story.append(Paragraph("""
-        "Net Cost" represents your ultimate out-of-pocket expense to fund the project over the loan tenure.
+        <b>"Net Cost"</b> represents your ultimate <b>out-of-pocket expense to fund the project</b> over the loan tenure.
         It is calculated as:
         `Net Cost = Total Project Cost + Effective Total Loan Interest (After Tax) - Post-Tax Investment Gains`
         """, styles['Normal']))
+        story.append(Paragraph("""
+        Let's break that down:
+        <ul>
+            <li><b>Total Project Cost:</b> The fundamental cost of acquiring or building the project.</li>
+            <li><b>Effective Total Loan Interest (After Tax):</b> This is the gross interest paid on the loan, reduced by any tax savings if the loan interest is tax-deductible as a business expense (based on your input `Tax Rate`).</li>
+            <li><b>Post-Tax Investment Gains:</b> Any net profits you earn from investing your own capital (after taxes) are subtracted, as these gains effectively reduce your overall cost.</li>
+        </ul>
+        This metric provides a true bottom-line figure for each financing option, allowing for direct and comparable evaluation of what you <i>truly spent</i> to get the project done.
+        """, styles['Normal']))
+        story.append(Spacer(1, 0.1 * inch))
+        story.append(Paragraph("""
+        ---
+        """, styles['Normal']))
+        story.append(Spacer(1, 0.1 * inch))
+        story.append(Paragraph("""
+        <b>"Total Investment (Gross Cash Outflow)"</b> represents the <b>total cash flow involved</b> in financing the project and managing your available capital over the loan tenure.
+        It is calculated as:
+        `Total Investment = Total Loan Payment (Principal + Gross Interest) + Own Capital Available`
+        """, styles['Normal']))
+        story.append(Paragraph("""
+        This figure is typically much higher than "Net Cost" because it does not account for tax benefits on interest or offsetting investment gains. It gives a sense of the gross funds that move through your financing strategy.
+        """, styles['Normal']))
         story.append(Spacer(1, 0.2 * inch))
+
 
         # Input Parameters Used
         story.append(Paragraph("Input Parameters Used:", styles['h2']))
@@ -842,7 +902,7 @@ class ProjectFinancingCalculator:
         # Investment Details
         investment_details = self.investment_options[inputs['investment_type']]
         input_params.append(["", ""]) # Spacer
-        input_params.append(["Investment Details:", ""])
+        input_params.append([Paragraph("<b>Investment Details:</b>", styles['Normal']), ""]) # Bold in PDF
         input_params.append([" - Liquidity:", investment_details['liquidity']])
         input_params.append([" - Tax Efficiency:", investment_details['tax_efficiency']])
         input_params.append([" - Compounding:", investment_details['compounding']])
@@ -856,26 +916,25 @@ class ProjectFinancingCalculator:
             ('RIGHTPADDING', (0,0), (-1,-1), 0),
             ('TOPPADDING', (0,0), (-1,-1), 2),
             ('BOTTOMPADDING', (0,0), (-1,-1), 2),
-            ('FONTNAME', (0,0), (0,-1), 'Helvetica-Bold'), # Bold first column
-            ('FONTNAME', (0,len(input_params)-4), (0,len(input_params)-4), 'Helvetica-Bold'), # Bold "Investment Details"
+            ('FONTNAME', (0,0), (0,-1), 'Helvetica'), # Removed bold from first column, will use Paragraph for specific bolding
         ]))
         story.append(table_input_params)
         story.append(Spacer(1, 0.2 * inch))
 
         # Key Insights
         story.append(Paragraph("Key Insights & Strategic Considerations:", styles['h2']))
-        story.append(Paragraph(f"Effective Loan Interest Rate (After Tax): {results['effective_loan_rate_annual']:.2f}% p.a.", styles['Normal']))
-        story.append(Paragraph(f"Effective Investment Return (After Tax): {results['effective_investment_return_annual']:.2f}% p.a.", styles['Normal']))
-        story.append(Paragraph(f"Interest Rate Spread (Loan - Investment): {results['interest_spread']:.2f}%", styles['Normal']))
+        story.append(Paragraph(f"Effective Loan Interest Rate (After Tax) (Annualized): <b>{results['effective_loan_rate_annual']:.2f}% p.a.</b>", styles['Normal']))
+        story.append(Paragraph(f"Effective Investment Return (After Tax) (Annualized): <b>{results['effective_investment_return_annual']:.2f}% p.a.</b>", styles['Normal']))
+        story.append(Paragraph(f"Interest Rate Spread (Loan - Investment): <b>{results['interest_spread']:.2f}%</b>", styles['Normal']))
         story.append(Paragraph("These annualized rates provide a clearer picture of the true cost of borrowing and the actual return on your investments, factoring in tax benefits.", styles['Normal']))
         story.append(Spacer(1, 0.1 * inch))
 
         # Risk & Scenario Analysis
         story.append(Paragraph("Risk & Scenario Analysis:", styles['h3']))
-        story.append(Paragraph(f" - Loan Interest Rate Risk: The loan is {inputs['loan_type']}. If floating, consider sensitivity to rate hikes and build in buffers.", styles['Normal']))
-        story.append(Paragraph(f" - Prepayment Cost: A {inputs['prepayment_penalty_pct']:.2f}% penalty on a full loan (Option 2) would be ₹{results['prepayment_cost']:.2f} lakh. Factor this into early exit scenarios and loan terms.", styles['Normal']))
-        story.append(Paragraph(" - Investment Volatility: Assumed investment returns are estimates. Stress test your plan with ±1-2% returns to understand the impact on net cost and liquidity.", styles['Normal']))
-        story.append(Paragraph(f" - Liquidity Buffer: Your target minimum liquidity is ₹{inputs['min_liquidity_target']:.1f} lakh. Ensure the chosen option consistently maintains this, especially under stressed cash flow scenarios (e.g., delayed project revenue, unexpected expenses).", styles['Normal']))
+        story.append(Paragraph(f" - Loan Interest Rate Risk: The loan is <b>{inputs['loan_type']}</b>. If floating, consider sensitivity to rate hikes and build in buffers.", styles['Normal']))
+        story.append(Paragraph(f" - Prepayment Cost: A {inputs['prepayment_penalty_pct']:.2f}% penalty on a full loan (Option 2) would be <b>₹{results['prepayment_cost']:.2f} lakh</b>. Factor this into early exit scenarios and loan terms.", styles['Normal']))
+        story.append(Paragraph(" - Investment Volatility: Assumed investment returns are estimates. Stress test your plan with &plusmn;1-2% returns to understand the impact on net cost and liquidity.", styles['Normal']))
+        story.append(Paragraph(f" - Liquidity Buffer: Your target minimum liquidity is <b>₹{inputs['min_liquidity_target']:.1f} lakh</b>. Ensure the chosen option consistently maintains this, especially under stressed cash flow scenarios (e.g., delayed project revenue, unexpected expenses).", styles['Normal']))
         story.append(Spacer(1, 0.1 * inch))
 
         # Nuanced Strategic Considerations
@@ -900,7 +959,7 @@ class ProjectFinancingCalculator:
 
         # Strategic Summary
         story.append(Paragraph("Strategic Summary: Best Practices for CFOs", styles['h2']))
-        story.append(Paragraph(f" - Quantify & Monitor Liquidity: Always maintain a minimum liquidity threshold (e.g., ₹{inputs['min_liquidity_target']:.1f} lakh always in instantly-accessible form) to ensure business agility and emergency preparedness.", styles['Normal']))
+        story.append(Paragraph(f" - Quantify & Monitor Liquidity: Always maintain a minimum liquidity threshold (e.g., <b>₹{inputs['min_liquidity_target']:.1f} lakh</b> always in instantly-accessible form) to ensure business agility and emergency preparedness.", styles['Normal']))
         story.append(Paragraph(" - Dynamic Financial Planning: Be prepared for faster loan prepayment or capital recycling if the business environment or investment returns shift in future years. Agility is key.", styles['Normal']))
         story.append(Paragraph(" - Continuous Benchmarking: Regularly benchmark your investment returns and borrowing costs against evolving market rates and new reinvestment opportunities to ensure optimal capital allocation.", styles['Normal']))
         story.append(Paragraph(" - Dashboard Monitoring: Implement and maintain a dynamic dashboard updated for promoters, CFO, and the board on all key financial parameters and risk indicators.", styles['Normal']))
@@ -909,7 +968,7 @@ class ProjectFinancingCalculator:
         # In short
         story.append(Paragraph("In short:", styles['h3']))
         story.append(Paragraph("""
-        A veteran advisor ensures your analysis encompasses all dimensions: cash flow, risk, flexibility, regulatory, tax, and capital structure. This holistic approach transforms "cost minimization" into value optimization—giving the CFO not just the "cheapest" route, but the safest and most strategic path for long-term business health and growth.
+        This section provides a concise, executive summary of the holistic advisory approach. It distills the comprehensive analysis into key actionable takeaways, ensuring that even busy stakeholders can quickly grasp the core value proposition: transforming "cost minimization" into value optimization—giving the CFO not just the "cheapest" route, but the safest and most strategic path for long-term business health and growth.
         """, styles['Normal']))
         
         # Add year-wise data as a new page
@@ -944,7 +1003,7 @@ class ProjectFinancingCalculator:
         return buffer.getvalue()
 
 
-    def export_to_csv(self, df, filename='analysis_data.csv', label="Download as CSV"):
+    def export_to_csv(self, df, filename='analysis_data.csv', label="Download Year-wise CSV"):
         """Export DataFrame to CSV and provide a download button"""
         csv_output = df.to_csv(index=False).encode('utf-8')
         st.download_button(
@@ -1129,8 +1188,8 @@ def main():
         'investment_return': float(investment_return),
         'tax_rate': float(tax_rate),
         'custom_capital_contribution': float(custom_capital_contribution),
-        'custom_capital_input_type': custom_capital_input_type, # Store the selected type
-        'custom_capital_percentage': float(custom_capital_percentage) # Store the percentage if applicable
+        'custom_capital_input_type': custom_capital_input_type,
+        'custom_capital_percentage': float(custom_capital_percentage)
     }
 
     st.markdown("---")
@@ -1158,6 +1217,7 @@ def main():
                 'Investment Maturity Value (from invested capital)',
                 'Gross Investment Gain (from invested capital)',
                 'Post-Tax Investment Gain (from invested capital)',
+                'Total Investment (Gross Cash Outflow)',
                 'NET COST'
             ],
             'Option 1: Own Capital + Small Loan': [
@@ -1170,6 +1230,7 @@ def main():
                 "₹0.0 lakh",
                 "₹0.0 lakh",
                 "₹0.0 lakh",
+                f"₹{results['option1']['total_investment_gross']:.2f} lakh",
                 f"₹{results['option1']['net_outflow']:.2f} lakh"
             ],
             'Option 2: Invest Capital + Full Loan': [
@@ -1182,6 +1243,7 @@ def main():
                 f"₹{results['option2']['investment_maturity']:.2f} lakh",
                 f"₹{results['option2']['investment_gain']:.2f} lakh",
                 f"₹{results['option2']['post_tax_gain']:.2f} lakh",
+                f"₹{results['option2']['total_investment_gross']:.2f} lakh",
                 f"₹{results['option2']['net_outflow']:.2f} lakh"
             ],
             'Option 3: Custom Capital + Loan': [
@@ -1194,6 +1256,7 @@ def main():
                 f"₹{results['option3']['investment_maturity']:.2f} lakh" if results['option3']['remaining_own_capital_invested'] > 0 else "₹0.0 lakh",
                 f"₹{results['option3']['investment_gain']:.2f} lakh" if results['option3']['remaining_own_capital_invested'] > 0 else "₹0.0 lakh",
                 f"₹{results['option3']['post_tax_gain']:.2f} lakh" if results['option3']['remaining_own_capital_invested'] > 0 else "₹0.0 lakh",
+                f"₹{results['option3']['total_investment_gross']:.2f} lakh",
                 f"₹{results['option3']['net_outflow']:.2f} lakh"
             ]
         }
