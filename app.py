@@ -4,6 +4,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 import numpy as np
 import streamlit as st # Import streamlit
+import io # Needed for in-memory Excel export
 
 # Set a consistent style for matplotlib plots
 plt.style.use('seaborn-v0_8')
@@ -474,10 +475,6 @@ def main():
 
     # Add a button to trigger calculation
     if st.button("Calculate Financing Options", type="primary"):
-        # The problematic validation that caused KeyError has been removed.
-        # The underlying calculation logic already handles cases where own_capital >= project_cost
-        # by setting option1_loan_amount to 0.
-
         # Perform calculations
         results = calc.calculate_comparison(inputs)
 
@@ -488,5 +485,9 @@ def main():
         df = calc.create_visualizations(inputs, results)
 
         # Provide Excel export
-        import io # Import io here as it's only needed for Excel export
         calc.export_to_excel(inputs, results, df)
+
+        st.success("Calculations complete!")
+
+if __name__ == "__main__":
+    main()
