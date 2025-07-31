@@ -619,7 +619,7 @@ class ProjectFinancingCalculator:
             st.write(" - **Optimization Moves & Additional Value Levers:** Consider phased loan drawdown or capital deployment strategies to minimize idle funds and optimize interest costs or investment gains.")
         st.markdown("---")
 
-    def generate_pdf_report(self, inputs, results, year_wise_df):
+   def generate_pdf_report(self, inputs, results, year_wise_df):
         """Generates a PDF report using ReportLab."""
         buffer = io.BytesIO()
         doc = SimpleDocTemplate(buffer, pagesize=A4,
@@ -627,204 +627,22 @@ class ProjectFinancingCalculator:
                                 topMargin=0.5*inch, bottomMargin=0.5*inch)
         styles = getSampleStyleSheet()
         # Custom style for small font tables
-       # Access the existing 'Italic' style and modify it
-    if 'Italic' in styles:
-        styles['Italic'].fontName = 'Helvetica-Oblique'
-        styles['Italic'].fontSize = 9
-        styles['Italic'].alignment = TA_LEFT
-    else:
-        # Fallback: if for some reason 'Italic' isn't there, add it
-        styles.add(ParagraphStyle(name='Italic', fontName='Helvetica-Oblique', fontSize=9, alignment=TA_LEFT))
+        styles.add(ParagraphStyle(name='TableCaption', fontSize=8, alignment=TA_CENTER))
         styles.add(ParagraphStyle(name='SmallTableText', fontSize=6, alignment=TA_CENTER))
         styles.add(ParagraphStyle(name='SmallTableTextLeft', fontSize=6, alignment=TA_LEFT))
 
         story = []
 
-        # Title
-        story.append(Paragraph("Project Financing Analysis Report", styles['h1']))
-        story.append(Spacer(1, 0.2 * inch))
+        # ... (rest of the PDF generation code) ...
 
-        # Date of Report
-        story.append(Paragraph(f"Date: {pd.Timestamp.now().strftime('%Y-%m-%d')}", styles['Normal']))
-        story.append(Spacer(1, 0.2 * inch))
-
-        # Recommendation
-        story.append(Paragraph("<b>Recommendation:</b>", styles['h2']))
-        recommendation_text = self.get_recommendation_text(results, inputs)
-        story.append(Paragraph(recommendation_text, styles['Normal']))
-        story.append(Paragraph(f"Potential Savings (compared to worst scenario): ₹{results['savings']:.2f} lakh", styles['Normal']))
-        story.append(Spacer(1, 0.2 * inch))
-
-        # Input Parameters
-        story.append(Paragraph("<b>Input Parameters Used:</b>", styles['h2']))
-        input_data = [
-            ['Metric', 'Value'],
-            ['Total Project Cost', f"₹{inputs['project_cost']:.1f} lakh"],
-            ['Own Capital Available', f"₹{inputs['own_capital']:.1f} lakh"],
-            ['Bank Loan Interest Rate', f"{inputs['loan_rate']:.2f}% p.a. ({inputs['loan_type']})"],
-            ['Loan Tenure', f"{inputs['loan_tenure']} years"],
-            ['Loan Interest Tax Deductible', 'Yes' if inputs['loan_interest_deductible'] else 'No'],
-            ['Prepayment Penalty', f"{inputs['prepayment_penalty_pct']:.2f}%"],
-            ['Minimum Liquidity Target', f"₹{inputs['min_liquidity_target']:.1f} lakh"],
-            ['Investment Type', inputs['investment_type']],
-            ['Investment Return', f"{inputs['investment_return']:.2f}% p.a."],
-            ['Tax Rate', f"{inputs['tax_rate']:.0f}%"]
-        ]
-        if inputs['custom_capital_input_type'] == 'Value (Lakhs)': # Match the radio button label
-            input_data.append(['Custom Capital Contribution (Scenario 3)', f"₹{inputs['custom_capital_contribution']:.1f} lakh"])
-        else:
-            input_data.append(['Custom Capital Contribution (Scenario 3)', f"{inputs['custom_capital_percentage']:.1f}% of Own Capital (₹{inputs['custom_capital_contribution']:.1f} lakh)"])
-        
-        input_table = Table(input_data, colWidths=[2.5*inch, 3*inch])
-        input_table.setStyle(TableStyle([
-            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#D3D3D3')),
-            ('GRID', (0,0), (-1,-1), 1, colors.black),
-            ('ALIGN', (0,0), (-1,-1), 'LEFT'),
-            ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold'),
-            ('BOTTOMPADDING', (0,0), (-1,0), 6),
-            ('BACKGROUND', (0,1), (-1,-1), colors.white),
-            ('FONTSIZE', (0,0), (-1,-1), 10)
-        ]))
-        story.append(input_table)
-        story.append(Spacer(1, 0.2 * inch))
-
-        # Investment Details
-        investment_details = self.investment_options[inputs['investment_type']]
-        story.append(Paragraph("<b>Investment Details:</b>", styles['h3']))
-        story.append(Paragraph(f" - <b>Liquidity:</b> {investment_details['liquidity']}", styles['Normal']))
-        story.append(Paragraph(f" - <b>Tax Efficiency:</b> {investment_details['tax_efficiency']}", styles['Normal']))
-        story.append(Paragraph(f" - <b>Compounding:</b> {investment_details['compounding']}", styles['Normal']))
-        story.append(Paragraph(f" - <b>Notes:</b> {investment_details['notes']}", styles['Normal']))
-        story.append(Spacer(1, 0.2 * inch))
-
-        # Financing Scenarios Comparison
-        story.append(Paragraph("<b>Financing Scenarios Comparison:</b>", styles['h2']))
-        
-        # Prepare data for PDF comparison table, ensuring consistent formatting and updated names
-        pdf_comparison_values = {
-            'Scenario 1: Maximum Own Funding': [
-                results['scenario1']['description'],
-                f"₹{results['scenario1']['capital_used_directly']:.1f} lakh",
-                "₹0.0 lakh", 
-                f"₹{results['scenario1']['loan_amount']:.1f} lakh",
-                f"₹{results['scenario1']['emi']:,.0f}",
-                f"₹{results['scenario1']['gross_total_interest']:.1f} lakh",
-                f"₹{results['scenario1']['effective_total_interest']:.1f} lakh",
-                "₹0.0 lakh",
-                "₹0.0 lakh",
-                f"₹{results['scenario1']['net_effective_cost']:.2f} lakh"
-            ],
-            'Scenario 2: Maximum Leverage': [
-                results['scenario2']['description'],
-                f"₹{results['scenario2']['capital_used_directly']:.1f} lakh",
-                f"₹{results['scenario2']['capital_invested']:.1f} lakh",
-                f"₹{results['scenario2']['loan_amount']:.1f} lakh",
-                f"₹{results['scenario2']['emi']:,.0f}",
-                f"₹{results['scenario2']['gross_total_interest']:.1f} lakh",
-                f"₹{results['scenario2']['effective_total_interest']:.1f} lakh",
-                f"₹{results['scenario2']['investment_maturity']:.2f} lakh",
-                f"₹{results['scenario2']['post_tax_gain']:.2f} lakh",
-                f"₹{results['scenario2']['net_effective_cost']:.2f} lakh"
-            ],
-            'Scenario 3: Balanced Approach': [
-                results['scenario3']['description'],
-                f"₹{results['scenario3']['capital_used_directly']:.1f} lakh",
-                f"₹{results['scenario3']['remaining_own_capital_invested']:.1f} lakh",
-                f"₹{results['scenario3']['loan_amount']:.1f} lakh",
-                f"₹{results['scenario3']['emi']:,.0f}",
-                f"₹{results['scenario3']['gross_total_interest']:.1f} lakh",
-                f"₹{results['scenario3']['effective_total_interest']:.1f} lakh",
-                f"₹{results['scenario3']['investment_maturity']:.2f} lakh" if results['scenario3']['remaining_own_capital_invested'] > 0 else "₹0.0 lakh",
-                f"₹{results['scenario3']['post_tax_gain']:.2f} lakh" if results['scenario3']['remaining_own_capital_invested'] > 0 else "₹0.0 lakh",
-                f"₹{results['scenario3']['net_effective_cost']:.2f} lakh"
-            ]
-        }
-        
-        # Build the comparison table for PDF
-        comparison_data_for_pdf = [
-            ['Metric', 'Scenario 1: Max Own Funding', 'Scenario 2: Max Leverage', 'Scenario 3: Balanced Approach']
-        ]
-        
-        # Match metrics to the dynamically generated values (using updated names)
-        metrics_list = [
-            'Scenario Description',
-            'Own Capital Used for Project',
-            'Own Capital Available & Invested',
-            'Loan Amount Required',
-            'Monthly EMI',
-            'Gross Total Interest Paid (Loan)',
-            'Effective Total Interest (After Tax Benefits)',
-            'Total Investment Maturity Value',
-            'Total Post-Tax Investment Gain',
-            'NET EFFECTIVE COST'
-        ]
-
-        for i, metric in enumerate(metrics_list):
-            row = [metric]
-            row.append(pdf_comparison_values['Scenario 1: Maximum Own Funding'][i])
-            row.append(pdf_comparison_values['Scenario 2: Maximum Leverage'][i])
-            row.append(pdf_comparison_values['Scenario 3: Balanced Approach'][i])
-            comparison_data_for_pdf.append(row)
-
-        # Calculate dynamic column widths for A4
-        table_width = A4[0] - (doc.leftMargin + doc.rightMargin)
-        col_widths_pdf = [table_width * 0.25] # For Metric column
-        col_widths_pdf.extend([table_width * 0.25] * 3) # For 3 scenarios
-
-        comparison_table = Table(comparison_data_for_pdf, colWidths=col_widths_pdf)
-        comparison_table.setStyle(TableStyle([
-            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#D3D3D3')),
-            ('GRID', (0,0), (-1,-1), 1, colors.black),
-            ('ALIGN', (0,0), (-1,-1), 'CENTER'),
-            ('ALIGN', (0,0), (0,-1), 'LEFT'), # Left align metric column
-            ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold'),
-            ('BOTTOMPADDING', (0,0), (-1,0), 6),
-            ('BACKGROUND', (0,1), (-1,-1), colors.white),
-            ('FONTSIZE', (0,0), (-1,-1), 8), # Smaller font for more compact table
-            ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
-        ]))
-        story.append(comparison_table)
-        story.append(Spacer(1, 0.2 * inch))
-        story.append(Paragraph("<i>Detailed explanation of 'Net Effective Cost' is available in the web application.</i>", styles['Italic']))
-        story.append(PageBreak()) # Start Year-wise data on a new page
-
-
-        # Year-wise Data
-        story.append(Paragraph("<b>Year-wise Financial Data:</b>", styles['h2']))
-        story.append(Spacer(1, 0.1 * inch))
-
-        # Convert DataFrame to list of lists for ReportLab table, including headers
-        year_wise_data_for_pdf = [year_wise_df.columns.tolist()] + year_wise_df.values.tolist()
-        
-        # Apply formatting to numeric columns in year_wise_data_for_pdf
-        for r_idx, row in enumerate(year_wise_data_for_pdf):
-            if r_idx == 0: # Skip header row
-                continue
-            for c_idx, value in enumerate(row):
-                if c_idx > 0: # All columns except 'Year' are numeric Lakhs
-                    year_wise_data_for_pdf[r_idx][c_idx] = f"{value:.2f}" # Format to 2 decimal places
-
-        # Set column widths to try and fit on page
-        # This will require careful balancing for the number of columns (13) on an A4 page
-        num_cols = len(year_wise_data_for_pdf[0])
-        # Total available width for table after margins
-        table_effective_width = A4[0] - (doc.leftMargin + doc.rightMargin)
-        
-        # Distribute remaining width among the value columns
-        # Assign a fixed small width to the 'Year' column
-        col_widths_year_wise = [0.4 * inch] 
-        remaining_width = table_effective_width - col_widths_year_wise[0]
-        # Distribute remaining width among the other 12 columns
-        width_per_value_col = remaining_width / (num_cols - 1)
-        col_widths_year_wise.extend([width_per_value_col] * (num_cols - 1))
-        
+        # This part needs to be correctly indented:
         try:
             year_wise_table = Table(year_wise_data_for_pdf, colWidths=col_widths_year_wise)
             year_wise_table.setStyle(TableStyle([
                 ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#D3D3D3')),
                 ('GRID', (0,0), (-1,-1), 0.5, colors.black),
                 ('ALIGN', (0,0), (-1,-1), 'CENTER'),
-                ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+                ('VALIGN', (0,0), (-1,-1), '-1,-1', 'MIDDLE'),
                 ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold'),
                 ('BOTTOMPADDING', (0,0), (-1,0), 4),
                 ('BACKGROUND', (0,1), (-1,-1), colors.white),
@@ -837,11 +655,10 @@ class ProjectFinancingCalculator:
                                    f"It contains {num_cols} columns and might be too wide for the page. "
                                    f"Please download the Excel/CSV for full year-wise data.</i></font>", styles['Normal']))
 
-
+        # Ensure these two lines are correctly indented within the method
         doc.build(story)
         buffer.seek(0)
-        return buffer
-
+        return buffer # <--- THIS LINE MUST BE INDENTED TO BE PART OF THE METHOD
 
 def main():
     st.set_page_config(layout="wide", page_title="Project Financing Calculator")
