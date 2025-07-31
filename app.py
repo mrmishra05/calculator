@@ -7,11 +7,12 @@ import streamlit as st
 import io
 
 # For PDF generation
-from reportlab.lib.pagesizes import letter
+from reportlab.lib.pagesizes import letter, A4
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, PageBreak
 from reportlab.lib.styles import getSampleStyleSheet
 from reportlab.lib.units import inch
 from reportlab.lib import colors
+from reportlab.lib.enums import TA_CENTER, TA_LEFT
 
 # Set a consistent style for matplotlib plots
 plt.style.use('seaborn-v0_8')
@@ -108,18 +109,18 @@ class ProjectFinancingCalculator:
         # Define column names explicitly for DataFrame creation
         column_names = [
             'Year',
-            'Scenario1_Interest_Paid_Cumulative (Lakh)',
-            'Scenario2_Interest_Paid_Cumulative (Lakh)',
-            'Scenario3_Interest_Paid_Cumulative (Lakh)',
-            'Investment_Value_Scenario2 (Lakh)',
-            'Investment_Value_Scenario3 (Lakh)',
-            'Investment_Gain_Scenario2 (Lakh)',
-            'Investment_Gain_Scenario3 (Lakh)',
-            'Post_Tax_Gain_Scenario2 (Lakh)',
-            'Post_Tax_Gain_Scenario3 (Lakh)',
-            'Scenario1_Net_Effective_Cost_Cumulative (Lakh)',
-            'Scenario2_Net_Effective_Cost_Cumulative (Lakh)',
-            'Scenario3_Net_Effective_Cost_Cumulative (Lakh)'
+            'S1_Cumulative_Gross_Interest (Lakh)',
+            'S2_Cumulative_Gross_Interest (Lakh)',
+            'S3_Cumulative_Gross_Interest (Lakh)',
+            'S2_Investment_Value (Lakh)',
+            'S3_Investment_Value (Lakh)',
+            'S2_Investment_Gain (Lakh)',
+            'S3_Investment_Gain (Lakh)',
+            'S2_Post_Tax_Investment_Gain (Lakh)',
+            'S3_Post_Tax_Investment_Gain (Lakh)',
+            'S1_Cumulative_Net_Effective_Cost (Lakh)',
+            'S2_Cumulative_Net_Effective_Cost (Lakh)',
+            'S3_Cumulative_Net_Effective_Cost (Lakh)'
         ]
         data = []
 
@@ -147,14 +148,14 @@ class ProjectFinancingCalculator:
         for year in range(inputs['loan_tenure'] + 1):
             # Scenario 1: Maximum Own Funding
             if year == 0:
-                s1_interest_paid_cumulative = 0
+                s1_gross_interest_cumulative = 0
                 s1_net_effective_cost_cumulative = inputs['project_cost'] # Only project cost at year 0
             else:
                 s1_total_paid_cumulative = scenario1_emi * 12 * year
                 s1_principal_paid_cumulative = min(s1_total_paid_cumulative, scenario1_loan_amount_actual)
-                s1_interest_paid_cumulative = max(0, s1_total_paid_cumulative - s1_principal_paid_cumulative) / 100000 # Convert to lakh
+                s1_gross_interest_cumulative = max(0, s1_total_paid_cumulative - s1_principal_paid_cumulative) / 100000 # Convert to lakh
                 
-                s1_effective_interest_cumulative = s1_interest_paid_cumulative
+                s1_effective_interest_cumulative = s1_gross_interest_cumulative
                 if inputs['loan_interest_deductible']:
                     s1_effective_interest_cumulative *= (1 - inputs['tax_rate']/100)
                 s1_net_effective_cost_cumulative = inputs['project_cost'] + s1_effective_interest_cumulative
@@ -162,7 +163,7 @@ class ProjectFinancingCalculator:
 
             # Scenario 2: Maximum Leverage
             if year == 0:
-                s2_interest_paid_cumulative = 0
+                s2_gross_interest_cumulative = 0
                 s2_investment_value = own_capital_lakh # Initial investment value
                 s2_investment_gain = 0
                 s2_post_tax_gain = 0
@@ -170,9 +171,9 @@ class ProjectFinancingCalculator:
             else:
                 s2_total_paid_cumulative = scenario2_emi * 12 * year
                 s2_principal_paid_cumulative = min(s2_total_paid_cumulative, scenario2_loan_amount_actual)
-                s2_interest_paid_cumulative = max(0, s2_total_paid_cumulative - s2_principal_paid_cumulative) / 100000 # Convert to lakh
+                s2_gross_interest_cumulative = max(0, s2_total_paid_cumulative - s2_principal_paid_cumulative) / 100000 # Convert to lakh
 
-                s2_effective_interest_cumulative = s2_interest_paid_cumulative
+                s2_effective_interest_cumulative = s2_gross_interest_cumulative
                 if inputs['loan_interest_deductible']:
                     s2_effective_interest_cumulative *= (1 - inputs['tax_rate']/100)
                 
@@ -190,7 +191,7 @@ class ProjectFinancingCalculator:
 
             # Scenario 3: Balanced Approach
             if year == 0:
-                s3_interest_paid_cumulative = 0
+                s3_gross_interest_cumulative = 0
                 s3_investment_value = scenario3_remaining_own_capital_lakh if scenario3_remaining_own_capital_lakh > 0 else 0
                 s3_investment_gain = 0
                 s3_post_tax_gain = 0
@@ -198,16 +199,16 @@ class ProjectFinancingCalculator:
             else:
                 s3_total_paid_cumulative = scenario3_emi * 12 * year
                 s3_principal_paid_cumulative = min(s3_total_paid_cumulative, scenario3_loan_amount_actual)
-                s3_interest_paid_cumulative = max(0, s3_total_paid_cumulative - s3_principal_paid_cumulative) / 100000 # Convert to lakh
+                s3_gross_interest_cumulative = max(0, s3_total_paid_cumulative - s3_principal_paid_cumulative) / 100000 # Convert to lakh
 
-                s3_effective_interest_cumulative = s3_interest_paid_cumulative
+                s3_effective_interest_cumulative = s3_gross_interest_cumulative
                 if inputs['loan_interest_deductible']:
                     s3_effective_interest_cumulative *= (1 - inputs['tax_rate']/100)
 
                 s3_investment_value = scenario3_remaining_own_capital_lakh # Initial value if no growth
-                if scenario3_remaining_own_capital_lakh > 0:
+                if scenario3_remaining_own_capital_invested_lakh > 0: # Ensure there was capital to invest
                     s3_investment_value = self.calculate_investment_growth(
-                        scenario3_remaining_own_capital_lakh,
+                        scenario3_remaining_own_capital_invested_lakh,
                         inputs['investment_return'],
                         year,
                         self.investment_options[inputs['investment_type']]['compounding']
@@ -220,9 +221,9 @@ class ProjectFinancingCalculator:
 
             data.append([
                 year,
-                s1_interest_paid_cumulative,
-                s2_interest_paid_cumulative,
-                s3_interest_paid_cumulative,
+                s1_gross_interest_cumulative,
+                s2_gross_interest_cumulative,
+                s3_gross_interest_cumulative,
                 s2_investment_value,
                 s3_investment_value,
                 s2_investment_gain,
@@ -275,9 +276,6 @@ class ProjectFinancingCalculator:
         s1_gross_total_interest_lakh = s1_gross_total_interest / 100000
         s1_effective_total_interest_lakh = s1_effective_total_interest / 100000
 
-        # Total Project Outlay (Gross Cash Outflow): Capital directly used + Gross loan payments
-        s1_total_project_outlay = s1_capital_used_directly_lakh + (s1_total_loan_payment / 100000)
-
         # Net Effective Cost: Project Cost + Effective Total Interest (no investment gains here)
         s1_net_effective_cost = inputs['project_cost'] + s1_effective_total_interest_lakh
 
@@ -309,9 +307,6 @@ class ProjectFinancingCalculator:
         )
         s2_investment_gain_lakh = s2_investment_maturity_value_lakh - s2_capital_invested_lakh
         s2_post_tax_gain_lakh = s2_investment_gain_lakh * (1 - inputs['tax_rate']/100)
-
-        # Total Project Outlay (Gross Cash Outflow): Gross loan payments + Own capital invested (initial outflow)
-        s2_total_project_outlay = (s2_total_loan_payment / 100000) + s2_capital_invested_lakh
 
         # Net Effective Cost: Project Cost + Effective Total Interest - Post-Tax Investment Gains
         s2_net_effective_cost = inputs['project_cost'] + s2_effective_total_interest_lakh - s2_post_tax_gain_lakh
@@ -350,9 +345,6 @@ class ProjectFinancingCalculator:
             s3_investment_gain_lakh = s3_investment_maturity_value_lakh - s3_remaining_own_capital_invested_lakh
             s3_post_tax_gain_lakh = s3_investment_gain_lakh * (1 - inputs['tax_rate']/100)
 
-        # Total Project Outlay (Gross Cash Outflow): Custom capital used + Gross loan payments + Remaining capital invested (initial outflow)
-        s3_total_project_outlay = s3_capital_used_directly_lakh + (s3_total_loan_payment / 100000) + s3_remaining_own_capital_invested_lakh
-
         # Net Effective Cost: Project Cost + Effective Total Interest - Post-Tax Investment Gains
         s3_net_effective_cost = inputs['project_cost'] + s3_effective_total_interest_lakh - s3_post_tax_gain_lakh
 
@@ -388,7 +380,10 @@ class ProjectFinancingCalculator:
 
         # Calculate prepayment penalty (assuming on initial loan amount of Scenario 2 for illustration)
         prepayment_cost = 0
-        if inputs['prepayment_penalty_pct'] > 0 and inputs['loan_tenure'] > 0:
+        # If the loan is fully prepaid immediately, it's on the full loan amount
+        # For a more accurate calculation, one would need to know the outstanding principal at time of prepayment
+        # For simplicity here, we'll calculate based on the initial project cost
+        if inputs['prepayment_penalty_pct'] > 0:
             prepayment_cost = (inputs['project_cost'] * inputs['prepayment_penalty_pct'] / 100)
 
 
@@ -399,10 +394,9 @@ class ProjectFinancingCalculator:
                 'capital_used_directly': s1_capital_used_directly_lakh,
                 'loan_amount': s1_loan_amount_lakh,
                 'emi': s1_emi,
-                'total_loan_payment': s1_total_loan_payment,
+                'total_gross_loan_payments': s1_total_loan_payment, # Keep this for internal calculation if needed, but not displayed as a primary metric
                 'gross_total_interest': s1_gross_total_interest_lakh,
                 'effective_total_interest': s1_effective_total_interest_lakh,
-                'total_project_outlay': s1_total_project_outlay,
                 'net_effective_cost': s1_net_effective_cost
             },
             'scenario2': {
@@ -411,13 +405,12 @@ class ProjectFinancingCalculator:
                 'capital_invested': s2_capital_invested_lakh,
                 'loan_amount': s2_loan_amount_lakh,
                 'emi': s2_emi,
-                'total_loan_payment': s2_total_loan_payment,
+                'total_gross_loan_payments': s2_total_loan_payment,
                 'gross_total_interest': s2_gross_total_interest_lakh,
                 'effective_total_interest': s2_effective_total_interest_lakh,
                 'investment_maturity': s2_investment_maturity_value_lakh,
                 'investment_gain': s2_investment_gain_lakh,
                 'post_tax_gain': s2_post_tax_gain_lakh,
-                'total_project_outlay': s2_total_project_outlay,
                 'net_effective_cost': s2_net_effective_cost
             },
             'scenario3': {
@@ -426,13 +419,12 @@ class ProjectFinancingCalculator:
                 'remaining_own_capital_invested': s3_remaining_own_capital_invested_lakh,
                 'loan_amount': s3_loan_amount_lakh,
                 'emi': s3_emi,
-                'total_loan_payment': s3_total_loan_payment,
+                'total_gross_loan_payments': s3_total_loan_payment,
                 'gross_total_interest': s3_gross_total_interest_lakh,
                 'effective_total_interest': s3_effective_total_interest_lakh,
                 'investment_maturity': s3_investment_maturity_value_lakh,
                 'investment_gain': s3_investment_gain_lakh,
                 'post_tax_gain': s3_post_tax_gain_lakh,
-                'total_project_outlay': s3_total_project_outlay,
                 'net_effective_cost': s3_net_effective_cost
             },
             'recommendation': recommendation,
@@ -500,30 +492,26 @@ class ProjectFinancingCalculator:
         comparison_data = {
             'Metric': [
                 'Scenario Description',
-                'Capital Used Directly for Project',
-                'Own Capital Invested (Initially)',
-                'Loan Amount Taken',
+                'Own Capital Used for Project',
+                'Own Capital Available & Invested',
+                'Loan Amount Required',
                 'Monthly EMI',
-                'Gross Total Interest Paid',
+                'Gross Total Interest Paid (Loan)',
                 'Effective Total Interest (After Tax Benefits)',
-                'Investment Maturity Value (from invested capital)',
-                'Gross Investment Gain (from invested capital)',
-                'Post-Tax Investment Gain (from invested capital)',
-                '**Total Project Outlay (Gross Cash Outflow)**', 
+                'Total Investment Maturity Value',
+                'Total Post-Tax Investment Gain',
                 '**NET EFFECTIVE COST**'
             ],
             'Scenario 1: Maximum Own Funding': [
                 results['scenario1']['description'],
                 f"₹{results['scenario1']['capital_used_directly']:.1f} lakh",
-                "₹0.0 lakh", # No own capital is explicitly "invested" separately
+                "₹0.0 lakh",
                 f"₹{results['scenario1']['loan_amount']:.1f} lakh",
                 f"₹{results['scenario1']['emi']:,.0f}",
                 f"₹{results['scenario1']['gross_total_interest']:.1f} lakh",
                 f"₹{results['scenario1']['effective_total_interest']:.1f} lakh",
                 "₹0.0 lakh",
                 "₹0.0 lakh",
-                "₹0.0 lakh",
-                f"₹{results['scenario1']['total_project_outlay']:.2f} lakh", 
                 f"₹{results['scenario1']['net_effective_cost']:.2f} lakh"
             ],
             'Scenario 2: Maximum Leverage': [
@@ -535,9 +523,7 @@ class ProjectFinancingCalculator:
                 f"₹{results['scenario2']['gross_total_interest']:.1f} lakh",
                 f"₹{results['scenario2']['effective_total_interest']:.1f} lakh",
                 f"₹{results['scenario2']['investment_maturity']:.2f} lakh",
-                f"₹{results['scenario2']['investment_gain']:.2f} lakh",
                 f"₹{results['scenario2']['post_tax_gain']:.2f} lakh",
-                f"₹{results['scenario2']['total_project_outlay']:.2f} lakh", 
                 f"₹{results['scenario2']['net_effective_cost']:.2f} lakh"
             ],
             'Scenario 3: Balanced Approach': [
@@ -549,31 +535,19 @@ class ProjectFinancingCalculator:
                 f"₹{results['scenario3']['gross_total_interest']:.1f} lakh",
                 f"₹{results['scenario3']['effective_total_interest']:.1f} lakh",
                 f"₹{results['scenario3']['investment_maturity']:.2f} lakh" if results['scenario3']['remaining_own_capital_invested'] > 0 else "₹0.0 lakh",
-                f"₹{results['scenario3']['investment_gain']:.2f} lakh" if results['scenario3']['remaining_own_capital_invested'] > 0 else "₹0.0 lakh",
                 f"₹{results['scenario3']['post_tax_gain']:.2f} lakh" if results['scenario3']['remaining_own_capital_invested'] > 0 else "₹0.0 lakh",
-                f"₹{results['scenario3']['total_project_outlay']:.2f} lakh",
                 f"₹{results['scenario3']['net_effective_cost']:.2f} lakh"
             ]
         }
         comparison_df = pd.DataFrame(comparison_data).set_index('Metric')
         st.dataframe(comparison_df)
 
-        # Definitions Expander
-        with st.expander("❓ Understanding the Key Metrics: Total Project Outlay & Net Effective Cost"): 
+        # Definitions Expander (Updated)
+        with st.expander("❓ Understanding the Key Metric: Net Effective Cost"): 
             st.markdown("""
-            Here's a breakdown of the core financial metrics used in this analysis:
+            Here's a breakdown of the core financial metric used in this analysis:
             
-            **1. Total Project Outlay (Gross Cash Outflow):**
-            This represents the **total amount of money that leaves your hands** (or your business's accounts) throughout the project's financing period. It's the sum of:
-            * **Own Capital Used Directly for Project:** Any of your own funds that you directly put into the project to reduce the loan amount.
-            * **Total Loan Payments (Principal + Gross Interest):** All EMI payments made to the bank over the loan tenure.
-            * **Own Capital Invested (Initially):** If you choose to invest your capital rather than use it directly for the project, this represents the initial lump sum investment.
-            
-            Think of it as the sum of all 'debit' entries related to acquiring the project and managing your capital. It does *not* account for tax benefits or investment gains that might offset these outflows.
-            
-            ---
-            
-            **2. Net Effective Cost (True Economic Cost):**
+            **Net Effective Cost (True Economic Cost):**
             This is the **ultimate financial burden** of funding the project, reflecting what the project *truly costs you* after accounting for all direct expenses, tax advantages, and investment benefits. It's calculated as:
             `Net Effective Cost = Total Project Cost + Effective Total Loan Interest (After Tax) - Post-Tax Investment Gains`
             
@@ -600,7 +574,7 @@ class ProjectFinancingCalculator:
         st.write(f"**Tax Rate:** {inputs['tax_rate']:.0f}%")
         
         # Display custom capital contribution based on input type
-        if inputs['custom_capital_input_type'] == 'Value':
+        if inputs['custom_capital_input_type'] == 'Value (Lakhs)': # Match the radio button label exactly
             st.write(f"**Custom Capital Contribution (Scenario 3):** ₹{inputs['custom_capital_contribution']:.1f} lakh")
         else:
             st.write(f"**Custom Capital Contribution (Scenario 3):** {inputs['custom_capital_percentage']:.1f}% of Own Capital (₹{inputs['custom_capital_contribution']:.1f} lakh)")
@@ -648,8 +622,15 @@ class ProjectFinancingCalculator:
     def generate_pdf_report(self, inputs, results, year_wise_df):
         """Generates a PDF report using ReportLab."""
         buffer = io.BytesIO()
-        doc = SimpleDocTemplate(buffer, pagesize=letter)
+        doc = SimpleDocTemplate(buffer, pagesize=A4,
+                                rightMargin=0.5*inch, leftMargin=0.5*inch,
+                                topMargin=0.5*inch, bottomMargin=0.5*inch)
         styles = getSampleStyleSheet()
+        # Custom style for small font tables
+        styles.add(ParagraphStyle(name='TableCaption', fontSize=8, alignment=TA_CENTER))
+        styles.add(ParagraphStyle(name='SmallTableText', fontSize=6, alignment=TA_CENTER))
+        styles.add(ParagraphStyle(name='SmallTableTextLeft', fontSize=6, alignment=TA_LEFT))
+
         story = []
 
         # Title
@@ -682,7 +663,7 @@ class ProjectFinancingCalculator:
             ['Investment Return', f"{inputs['investment_return']:.2f}% p.a."],
             ['Tax Rate', f"{inputs['tax_rate']:.0f}%"]
         ]
-        if inputs['custom_capital_input_type'] == 'Value':
+        if inputs['custom_capital_input_type'] == 'Value (Lakhs)': # Match the radio button label
             input_data.append(['Custom Capital Contribution (Scenario 3)', f"₹{inputs['custom_capital_contribution']:.1f} lakh"])
         else:
             input_data.append(['Custom Capital Contribution (Scenario 3)', f"{inputs['custom_capital_percentage']:.1f}% of Own Capital (₹{inputs['custom_capital_contribution']:.1f} lakh)"])
@@ -712,7 +693,7 @@ class ProjectFinancingCalculator:
         # Financing Scenarios Comparison
         story.append(Paragraph("<b>Financing Scenarios Comparison:</b>", styles['h2']))
         
-        # Prepare data for PDF comparison table, ensuring consistent formatting
+        # Prepare data for PDF comparison table, ensuring consistent formatting and updated names
         pdf_comparison_values = {
             'Scenario 1: Maximum Own Funding': [
                 results['scenario1']['description'],
@@ -724,8 +705,6 @@ class ProjectFinancingCalculator:
                 f"₹{results['scenario1']['effective_total_interest']:.1f} lakh",
                 "₹0.0 lakh",
                 "₹0.0 lakh",
-                "₹0.0 lakh",
-                f"₹{results['scenario1']['total_project_outlay']:.2f} lakh", 
                 f"₹{results['scenario1']['net_effective_cost']:.2f} lakh"
             ],
             'Scenario 2: Maximum Leverage': [
@@ -737,9 +716,7 @@ class ProjectFinancingCalculator:
                 f"₹{results['scenario2']['gross_total_interest']:.1f} lakh",
                 f"₹{results['scenario2']['effective_total_interest']:.1f} lakh",
                 f"₹{results['scenario2']['investment_maturity']:.2f} lakh",
-                f"₹{results['scenario2']['investment_gain']:.2f} lakh",
                 f"₹{results['scenario2']['post_tax_gain']:.2f} lakh",
-                f"₹{results['scenario2']['total_project_outlay']:.2f} lakh", 
                 f"₹{results['scenario2']['net_effective_cost']:.2f} lakh"
             ],
             'Scenario 3: Balanced Approach': [
@@ -751,31 +728,27 @@ class ProjectFinancingCalculator:
                 f"₹{results['scenario3']['gross_total_interest']:.1f} lakh",
                 f"₹{results['scenario3']['effective_total_interest']:.1f} lakh",
                 f"₹{results['scenario3']['investment_maturity']:.2f} lakh" if results['scenario3']['remaining_own_capital_invested'] > 0 else "₹0.0 lakh",
-                f"₹{results['scenario3']['investment_gain']:.2f} lakh" if results['scenario3']['remaining_own_capital_invested'] > 0 else "₹0.0 lakh",
                 f"₹{results['scenario3']['post_tax_gain']:.2f} lakh" if results['scenario3']['remaining_own_capital_invested'] > 0 else "₹0.0 lakh",
-                f"₹{results['scenario3']['total_project_outlay']:.2f} lakh",
                 f"₹{results['scenario3']['net_effective_cost']:.2f} lakh"
             ]
         }
         
         # Build the comparison table for PDF
         comparison_data_for_pdf = [
-            ['Metric', 'Scenario 1: Maximum Own Funding', 'Scenario 2: Maximum Leverage', 'Scenario 3: Balanced Approach']
+            ['Metric', 'Scenario 1: Max Own Funding', 'Scenario 2: Max Leverage', 'Scenario 3: Balanced Approach']
         ]
         
-        # Match metrics to the dynamically generated values
+        # Match metrics to the dynamically generated values (using updated names)
         metrics_list = [
             'Scenario Description',
-            'Capital Used Directly for Project',
-            'Own Capital Invested (Initially)',
-            'Loan Amount Taken',
+            'Own Capital Used for Project',
+            'Own Capital Available & Invested',
+            'Loan Amount Required',
             'Monthly EMI',
-            'Gross Total Interest Paid',
+            'Gross Total Interest Paid (Loan)',
             'Effective Total Interest (After Tax Benefits)',
-            'Investment Maturity Value (from invested capital)',
-            'Gross Investment Gain (from invested capital)',
-            'Post-Tax Investment Gain (from invested capital)',
-            'Total Project Outlay (Gross Cash Outflow)', 
+            'Total Investment Maturity Value',
+            'Total Post-Tax Investment Gain',
             'NET EFFECTIVE COST'
         ]
 
@@ -786,7 +759,12 @@ class ProjectFinancingCalculator:
             row.append(pdf_comparison_values['Scenario 3: Balanced Approach'][i])
             comparison_data_for_pdf.append(row)
 
-        comparison_table = Table(comparison_data_for_pdf, colWidths=[2.1*inch, 1.8*inch, 1.8*inch, 1.8*inch])
+        # Calculate dynamic column widths for A4
+        table_width = A4[0] - (doc.leftMargin + doc.rightMargin)
+        col_widths_pdf = [table_width * 0.25] # For Metric column
+        col_widths_pdf.extend([table_width * 0.25] * 3) # For 3 scenarios
+
+        comparison_table = Table(comparison_data_for_pdf, colWidths=col_widths_pdf)
         comparison_table.setStyle(TableStyle([
             ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#D3D3D3')),
             ('GRID', (0,0), (-1,-1), 1, colors.black),
@@ -795,11 +773,12 @@ class ProjectFinancingCalculator:
             ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold'),
             ('BOTTOMPADDING', (0,0), (-1,0), 6),
             ('BACKGROUND', (0,1), (-1,-1), colors.white),
-            ('FONTSIZE', (0,0), (-1,-1), 7) # Smaller font for more compact table
+            ('FONTSIZE', (0,0), (-1,-1), 8), # Smaller font for more compact table
+            ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
         ]))
         story.append(comparison_table)
         story.append(Spacer(1, 0.2 * inch))
-        story.append(Paragraph("<i>Detailed explanations of 'Total Project Outlay' and 'Net Effective Cost' are available in the web application.</i>", styles['Italic']))
+        story.append(Paragraph("<i>Detailed explanation of 'Net Effective Cost' is available in the web application.</i>", styles['Italic']))
         story.append(PageBreak()) # Start Year-wise data on a new page
 
 
@@ -819,14 +798,21 @@ class ProjectFinancingCalculator:
                     year_wise_data_for_pdf[r_idx][c_idx] = f"{value:.2f}" # Format to 2 decimal places
 
         # Set column widths to try and fit on page
+        # This will require careful balancing for the number of columns (13) on an A4 page
         num_cols = len(year_wise_data_for_pdf[0])
-        # Distribute widths based on the number of columns and page size
-        col_widths = [letter[0] / num_cols - (0.5 * inch / num_cols)] * num_cols # Basic distribution
-        # Adjust specific columns if known to be wider/narrower
-        col_widths[0] = 0.5 * inch # Year column
+        # Total available width for table after margins
+        table_effective_width = A4[0] - (doc.leftMargin + doc.rightMargin)
+        
+        # Distribute remaining width among the value columns
+        # Assign a fixed small width to the 'Year' column
+        col_widths_year_wise = [0.4 * inch] 
+        remaining_width = table_effective_width - col_widths_year_wise[0]
+        # Distribute remaining width among the other 12 columns
+        width_per_value_col = remaining_width / (num_cols - 1)
+        col_widths_year_wise.extend([width_per_value_col] * (num_cols - 1))
         
         try:
-            year_wise_table = Table(year_wise_data_for_pdf, colWidths=col_widths)
+            year_wise_table = Table(year_wise_data_for_pdf, colWidths=col_widths_year_wise)
             year_wise_table.setStyle(TableStyle([
                 ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#D3D3D3')),
                 ('GRID', (0,0), (-1,-1), 0.5, colors.black),
@@ -835,11 +821,14 @@ class ProjectFinancingCalculator:
                 ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold'),
                 ('BOTTOMPADDING', (0,0), (-1,0), 4),
                 ('BACKGROUND', (0,1), (-1,-1), colors.white),
-                ('FONTSIZE', (0,0), (-1,-1), 6) # Very small font to fit many columns
+                ('FONTSIZE', (0,0), (-1,-1), 5) # VERY small font to try and fit
             ]))
             story.append(year_wise_table)
         except Exception as e:
-            story.append(Paragraph(f"<i>Could not generate Year-wise table due to: {e}. It might be too wide for the page.</i>", styles['Italic']))
+            # Fallback for tables too wide to fit
+            story.append(Paragraph(f"<font color='red'><i>Could not generate Year-wise table in PDF due to layout constraints: {e}. "
+                                   f"It contains {num_cols} columns and might be too wide for the page. "
+                                   f"Please download the Excel/CSV for full year-wise data.</i></font>", styles['Normal']))
 
 
         doc.build(story)
@@ -850,6 +839,12 @@ class ProjectFinancingCalculator:
 def main():
     st.set_page_config(layout="wide", page_title="Project Financing Calculator")
     calculator = ProjectFinancingCalculator()
+    styles = getSampleStyleSheet() # Needed for custom style below
+    
+    # Custom ParagraphStyle for PDF
+    from reportlab.lib.styles import ParagraphStyle # Import ParagraphStyle
+    styles.add(ParagraphStyle(name='Italic', fontName='Helvetica-Oblique', fontSize=9, alignment=TA_LEFT))
+
 
     st.title("💰 Project Financing Strategy Calculator")
     st.markdown("""
@@ -952,9 +947,9 @@ def main():
             with col_plot1:
                 st.subheader("Net Effective Cost Over Years")
                 fig_cost, ax_cost = plt.subplots(figsize=(10, 6))
-                ax_cost.plot(year_wise_df['Year'], year_wise_df['Scenario1_Net_Effective_Cost_Cumulative (Lakh)'], label='Scenario 1', marker='o')
-                ax_cost.plot(year_wise_df['Year'], year_wise_df['Scenario2_Net_Effective_Cost_Cumulative (Lakh)'], label='Scenario 2', marker='x')
-                ax_cost.plot(year_wise_df['Year'], year_wise_df['Scenario3_Net_Effective_Cost_Cumulative (Lakh)'], label='Scenario 3', marker='s')
+                ax_cost.plot(year_wise_df['Year'], year_wise_df['S1_Cumulative_Net_Effective_Cost (Lakh)'], label='Scenario 1', marker='o')
+                ax_cost.plot(year_wise_df['Year'], year_wise_df['S2_Cumulative_Net_Effective_Cost (Lakh)'], label='Scenario 2', marker='x')
+                ax_cost.plot(year_wise_df['Year'], year_wise_df['S3_Cumulative_Net_Effective_Cost (Lakh)'], label='Scenario 3', marker='s')
                 ax_cost.set_xlabel("Year")
                 ax_cost.set_ylabel("Cumulative Net Effective Cost (Lakh ₹)")
                 ax_cost.set_title("Cumulative Net Effective Cost for Each Scenario")
@@ -963,14 +958,14 @@ def main():
                 st.pyplot(fig_cost)
 
             with col_plot2:
-                st.subheader("Cumulative Interest Paid Over Years")
+                st.subheader("Cumulative Gross Interest Paid Over Years")
                 fig_interest, ax_interest = plt.subplots(figsize=(10, 6))
-                ax_interest.plot(year_wise_df['Year'], year_wise_df['Scenario1_Interest_Paid_Cumulative (Lakh)'], label='Scenario 1', marker='o')
-                ax_interest.plot(year_wise_df['Year'], year_wise_df['Scenario2_Interest_Paid_Cumulative (Lakh)'], label='Scenario 2', marker='x')
-                ax_interest.plot(year_wise_df['Year'], year_wise_df['Scenario3_Interest_Paid_Cumulative (Lakh)'], label='Scenario 3', marker='s')
+                ax_interest.plot(year_wise_df['Year'], year_wise_df['S1_Cumulative_Gross_Interest (Lakh)'], label='Scenario 1', marker='o')
+                ax_interest.plot(year_wise_df['Year'], year_wise_df['S2_Cumulative_Gross_Interest (Lakh)'], label='Scenario 2', marker='x')
+                ax_interest.plot(year_wise_df['Year'], year_wise_df['S3_Cumulative_Gross_Interest (Lakh)'], label='Scenario 3', marker='s')
                 ax_interest.set_xlabel("Year")
-                ax_interest.set_ylabel("Cumulative Interest Paid (Lakh ₹)")
-                ax_interest.set_title("Cumulative Interest Paid for Each Scenario")
+                ax_interest.set_ylabel("Cumulative Gross Interest Paid (Lakh ₹)")
+                ax_interest.set_title("Cumulative Gross Interest Paid for Each Scenario")
                 ax_interest.legend()
                 ax_interest.grid(True)
                 st.pyplot(fig_interest)
@@ -989,21 +984,6 @@ def main():
             ax_bar.set_title("Final Net Effective Cost by Scenario")
             ax_bar.set_ylabel("Net Effective Cost (Lakh ₹)")
             st.pyplot(fig_bar)
-
-            # Bar chart for final Total Project Outlay
-            st.subheader("Final Total Project Outlay Comparison")
-            final_outlays = {
-                'Scenario 1': results['scenario1']['total_project_outlay'],
-                'Scenario 2': results['scenario2']['total_project_outlay'],
-                'Scenario 3': results['scenario3']['total_project_outlay']
-            }
-            outlay_df = pd.DataFrame(final_outlays.items(), columns=['Scenario', 'Total Project Outlay (Lakh ₹)'])
-            
-            fig_outlay, ax_outlay = plt.subplots(figsize=(10, 6))
-            sns.barplot(x='Scenario', y='Total Project Outlay (Lakh ₹)', data=outlay_df, ax=ax_outlay, palette='plasma')
-            ax_outlay.set_title("Final Total Project Outlay by Scenario")
-            ax_outlay.set_ylabel("Total Project Outlay (Lakh ₹)")
-            st.pyplot(fig_outlay)
 
             st.markdown("---")
             st.header("5. Download Data")
@@ -1029,8 +1009,8 @@ def main():
                     "Scenario 3": results["scenario3"]
                 }
                 summary_df = pd.DataFrame.from_dict(summary_data_for_excel, orient='index')
-                # Filter out 'description' as it's just text
-                summary_df = summary_df.drop(columns=['description'], errors='ignore') 
+                # Filter out 'description' and 'total_gross_loan_payments' as they are not needed in this summary view
+                summary_df = summary_df.drop(columns=['description', 'total_gross_loan_payments'], errors='ignore') 
                 summary_df.to_excel(writer, sheet_name='Summary Results')
             
             st.download_button(
