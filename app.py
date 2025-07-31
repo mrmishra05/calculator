@@ -81,43 +81,89 @@ class ProjectFinancingCalculator:
     def generate_year_wise_data(self, inputs, results):
         """Generate year-wise breakdown for analysis"""
         data = []
+        # Add header row - ADD NEW COLUMNS HERE
+        data.append([
+            'Year',
+            'Option1_Interest_Paid',
+            'Option2_Interest_Paid',
+            'Option3_Interest_Paid', # NEW
+            'Investment_Value_Option2', # Renamed for clarity
+            'Investment_Value_Option3', # NEW
+            'Investment_Gain_Option2', # Renamed
+            'Investment_Gain_Option3', # NEW
+            'Post_Tax_Gain_Option2', # Renamed
+            'Post_Tax_Gain_Option3', # NEW
+            'Option1_Net_Cost', # NEW - to plot against other net costs
+            'Option2_Net_Cost',
+            'Option3_Net_Cost' # NEW
+        ])
 
         for year in range(inputs['loan_tenure'] + 1):
             # Option 1 calculations
-            # Ensure calculations are done with full amounts, then converted to lakh for display if needed
-            option1_loan_amount_actual = results['option1']['loan_amount'] * 100000
-            option1_paid = results['option1']['emi'] * 12 * year
-            option1_principal_paid = min(option1_paid, option1_loan_amount_actual)
-            option1_interest_paid = max(0, option1_paid - option1_principal_paid) / 100000 # Convert to lakh
+            option1_loan_amount_actual_at_start = results['option1']['loan_amount'] * 100000
+            option1_paid_cumulative = results['option1']['emi'] * 12 * year
+            option1_principal_paid_cumulative = min(option1_paid_cumulative, option1_loan_amount_actual_at_start)
+            option1_interest_paid_cumulative = max(0, option1_paid_cumulative - option1_principal_paid_cumulative) / 100000 # Convert to lakh
+            option1_net_cost_cumulative = (inputs['own_capital'] * 100000 + option1_interest_paid_cumulative * 100000) / 100000
+
 
             # Option 2 calculations
-            option2_loan_amount_actual = inputs['project_cost'] * 100000
-            option2_paid = results['option2']['emi'] * 12 * year
-            option2_principal_paid = min(option2_paid, option2_loan_amount_actual)
-            option2_interest_paid = max(0, option2_paid - option2_principal_paid) / 100000 # Convert to lakh
+            option2_loan_amount_actual_at_start = inputs['project_cost'] * 100000
+            option2_paid_cumulative = results['option2']['emi'] * 12 * year
+            option2_principal_paid_cumulative = min(option2_paid_cumulative, option2_loan_amount_actual_at_start)
+            option2_interest_paid_cumulative = max(0, option2_paid_cumulative - option2_principal_paid_cumulative) / 100000 # Convert to lakh
 
-            # Investment value
-            if year == 0:
-                investment_value = inputs['own_capital']
-            else:
-                investment_value = self.calculate_investment_growth(
+            investment_value_option2 = inputs['own_capital']
+            if year > 0:
+                investment_value_option2 = self.calculate_investment_growth(
                     inputs['own_capital'],
                     inputs['investment_return'],
                     year,
                     self.investment_options[inputs['investment_type']]['compounding']
                 )
+            investment_gain_option2 = investment_value_option2 - inputs['own_capital']
+            post_tax_gain_option2 = investment_gain_option2 * (1 - inputs['tax_rate']/100)
+            option2_net_cost_cumulative = option2_interest_paid_cumulative - post_tax_gain_option2
 
-            investment_gain = investment_value - inputs['own_capital']
-            post_tax_gain = investment_gain * (1 - inputs['tax_rate']/100)
+
+            # Option 3 calculations
+            option3_capital_used = inputs['custom_capital_contribution']
+            option3_loan_amount_actual_at_start = max(0, inputs['project_cost'] - option3_capital_used) * 100000
+            
+            option3_paid_cumulative = results['option3']['emi'] * 12 * year if year > 0 else 0
+            option3_principal_paid_cumulative = min(option3_paid_cumulative, option3_loan_amount_actual_at_start)
+            option3_interest_paid_cumulative = max(0, option3_paid_cumulative - option3_principal_paid_cumulative) / 100000 # Convert to lakh
+
+            option3_remaining_own_capital = inputs['own_capital'] - option3_capital_used
+            investment_value_option3 = option3_remaining_own_capital # At year 0
+            if year > 0 and option3_remaining_own_capital > 0:
+                investment_value_option3 = self.calculate_investment_growth(
+                    option3_remaining_own_capital,
+                    inputs['investment_return'],
+                    year,
+                    self.investment_options[inputs['investment_type']]['compounding']
+                )
+            investment_gain_option3 = investment_value_option3 - option3_remaining_own_capital
+            post_tax_gain_option3 = investment_gain_option3 * (1 - inputs['tax_rate']/100)
+            
+            # Option 3 Net Cost year-wise (cumulative capital used + cumulative interest - cumulative post-tax gain)
+            option3_net_cost_cumulative = option3_capital_used + option3_interest_paid_cumulative - post_tax_gain_option3
+
 
             data.append({
                 'Year': year,
-                'Option1_Interest_Paid': option1_interest_paid,
-                'Option2_Interest_Paid': option2_interest_paid,
-                'Investment_Value': investment_value,
-                'Investment_Gain': investment_gain,
-                'Post_Tax_Gain': post_tax_gain,
-                'Option2_Net_Cost': option2_interest_paid - post_tax_gain
+                'Option1_Interest_Paid': option1_interest_paid_cumulative,
+                'Option2_Interest_Paid': option2_interest_paid_cumulative,
+                'Option3_Interest_Paid': option3_interest_paid_cumulative, # NEW
+                'Investment_Value_Option2': investment_value_option2, # Renamed
+                'Investment_Value_Option3': investment_value_option3, # NEW
+                'Investment_Gain_Option2': investment_gain_option2, # Renamed
+                'Investment_Gain_Option3': investment_gain_option3, # NEW
+                'Post_Tax_Gain_Option2': post_tax_gain_option2, # Renamed
+                'Post_Tax_Gain_Option3': post_tax_gain_option3, # NEW
+                'Option1_Net_Cost': option1_net_cost_cumulative, # NEW
+                'Option2_Net_Cost': option2_net_cost_cumulative,
+                'Option3_Net_Cost': option3_net_cost_cumulative # NEW
             })
 
         return pd.DataFrame(data)
@@ -130,11 +176,12 @@ class ProjectFinancingCalculator:
         option1_emi = self.calculate_emi(option1_loan_amount_actual, inputs['loan_rate'], inputs['loan_tenure'])
         option1_total_payment = option1_emi * 12 * inputs['loan_tenure']
         option1_total_interest = option1_total_payment - option1_loan_amount_actual
-        option1_net_outflow = (inputs['own_capital'] * 100000) + option1_total_interest # Convert own_capital to actual
+        option1_net_outflow = (inputs['own_capital'] * 100000 + option1_total_interest) / 100000 # Convert own_capital to actual
         
         # Convert back to lakh for results
         option1_total_interest_lakh = option1_total_interest / 100000
-        option1_net_outflow_lakh = option1_net_outflow / 100000
+        # option1_net_outflow_lakh is already calculated above
+
 
         # Option 2: Invest own capital + take full loan
         option2_loan_amount_lakh = inputs['project_cost']
@@ -143,29 +190,74 @@ class ProjectFinancingCalculator:
         option2_total_payment = option2_emi * 12 * inputs['loan_tenure']
         option2_total_interest = option2_total_payment - option2_loan_amount_actual
 
-        # Investment calculations
-        investment_maturity_value = self.calculate_investment_growth(
+        # Investment calculations for Option 2
+        investment_maturity_value_option2 = self.calculate_investment_growth(
             inputs['own_capital'], # Already in lakh
             inputs['investment_return'],
             inputs['loan_tenure'],
             self.investment_options[inputs['investment_type']]['compounding']
         )
+        investment_gain_option2 = investment_maturity_value_option2 - inputs['own_capital']
+        post_tax_gain_option2 = investment_gain_option2 * (1 - inputs['tax_rate']/100)
+        option2_net_outflow = (option2_total_interest / 100000) - post_tax_gain_option2 # Convert total_interest to lakh
 
-        investment_gain = investment_maturity_value - inputs['own_capital']
-        post_tax_gain = investment_gain * (1 - inputs['tax_rate']/100)
-        option2_net_outflow = (option2_total_interest / 100000) - post_tax_gain # Convert total_interest to lakh
 
-        # Determine recommendation
-        recommendation = 'option1' if option1_net_outflow_lakh < option2_net_outflow else 'option2'
-        savings = abs(option1_net_outflow_lakh - option2_net_outflow);
+        # Option 3: Custom Capital Contribution + Loan
+        option3_capital_used = inputs['custom_capital_contribution']
+        option3_loan_amount_lakh = max(0, inputs['project_cost'] - option3_capital_used)
+        option3_loan_amount_actual = option3_loan_amount_lakh * 100000
 
+        option3_emi = self.calculate_emi(option3_loan_amount_actual, inputs['loan_rate'], inputs['loan_tenure'])
+        option3_total_payment = option3_emi * 12 * inputs['loan_tenure']
+        option3_total_interest = option3_total_payment - option3_loan_amount_actual
+        option3_total_interest_lakh = option3_total_interest / 100000
+
+        # Calculate investment for remaining own capital (if any) for Option 3
+        option3_remaining_own_capital = inputs['own_capital'] - option3_capital_used
+        option3_investment_maturity_value = 0
+        option3_investment_gain = 0
+        option3_post_tax_gain = 0
+
+        if option3_remaining_own_capital > 0:
+            option3_investment_maturity_value = self.calculate_investment_growth(
+                option3_remaining_own_capital,
+                inputs['investment_return'],
+                inputs['loan_tenure'],
+                self.investment_options[inputs['investment_type']]['compounding']
+            )
+            option3_investment_gain = option3_investment_maturity_value - option3_remaining_own_capital
+            option3_post_tax_gain = option3_investment_gain * (1 - inputs['tax_rate']/100)
+
+        # Net outflow for Option 3: Capital used + loan interest - investment gains (if any)
+        option3_net_outflow = option3_capital_used + option3_total_interest_lakh - option3_post_tax_gain
+
+        # Determine recommendation (now comparing 3 options)
+        all_net_outflows = {
+            'option1': option1_net_outflow,
+            'option2': option2_net_outflow,
+            'option3': option3_net_outflow
+        }
+        
+        min_net_outflow_value = min(all_net_outflows.values())
+        
+        recommendation = ''
+        for key, value in all_net_outflows.items():
+            if value == min_net_outflow_value:
+                recommendation = key
+                break # Found the first matching option
+
+        max_net_outflow_value = max(all_net_outflows.values())
+        savings_against_worst = max_net_outflow_value - min_net_outflow_value
+
+
+        # Update the results dictionary
         results = {
             'option1': {
                 'loan_amount': option1_loan_amount_lakh,
                 'emi': option1_emi,
                 'total_payment': option1_total_payment,
                 'total_interest': option1_total_interest_lakh,
-                'net_outflow': option1_net_outflow_lakh,
+                'net_outflow': option1_net_outflow,
                 'capital_used': inputs['own_capital']
             },
             'option2': {
@@ -173,32 +265,55 @@ class ProjectFinancingCalculator:
                 'emi': option2_emi,
                 'total_payment': option2_total_payment,
                 'total_interest': option2_total_interest / 100000, # Convert to lakh
-                'investment_maturity': investment_maturity_value,
-                'investment_gain': investment_gain,
-                'post_tax_gain': post_tax_gain,
+                'investment_maturity': investment_maturity_value_option2,
+                'investment_gain': investment_gain_option2,
+                'post_tax_gain': post_tax_gain_option2,
                 'net_outflow': option2_net_outflow
             },
+            'option3': { # NEW OPTION 3 RESULTS
+                'capital_used': option3_capital_used,
+                'loan_amount': option3_loan_amount_lakh,
+                'emi': option3_emi,
+                'total_payment': option3_total_payment,
+                'total_interest': option3_total_interest_lakh,
+                'remaining_own_capital_invested': option3_remaining_own_capital,
+                'investment_maturity': option3_investment_maturity_value,
+                'investment_gain': option3_investment_gain,
+                'post_tax_gain': option3_post_tax_gain,
+                'net_outflow': option3_net_outflow
+            },
             'recommendation': recommendation,
-            'savings': savings,
+            'savings': savings_against_worst, # Update savings to be against the worst option
             'interest_spread': inputs['loan_rate'] - inputs['investment_return']
         }
-
+        
         return results
 
     def get_recommendation_text(self, results, inputs):
-        """Generate recommendation text"""
+        """Generate recommendation text considering 3 options"""
         interest_spread = results['interest_spread']
+        recommendation_option = results['recommendation']
 
-        if results['recommendation'] == 'option1':
+        if recommendation_option == 'option1':
             if interest_spread > 3:
-                return "💡 Use own funds - loan rate is significantly higher than investment returns"
+                return "💡 Option 1 (Use own funds directly) is recommended - loan rate is significantly higher than investment returns."
             else:
-                return "💡 Use own funds - better capital preservation with lower total cost"
-        else:
+                return "💡 Option 1 (Use own funds directly) is recommended - better capital preservation with lower total cost."
+        elif recommendation_option == 'option2':
             if interest_spread < -2:
-                return "💡 Use bank loan and invest - your investment returns significantly exceed loan costs"
+                return "💡 Option 2 (Use bank loan and invest) is recommended - your investment returns significantly exceed loan costs."
             else:
-                return "💡 Use bank loan and invest - maintains liquidity while generating positive returns"
+                return "💡 Option 2 (Use bank loan and invest) is recommended - maintains liquidity while generating positive returns."
+        else: # recommendation_option == 'option3'
+            if results['option3']['remaining_own_capital_invested'] > 0 and results['option3']['loan_amount'] > 0:
+                return f"💡 Option 3 (Custom Contribution) is recommended - a balanced approach using ₹{results['option3']['capital_used']:.1f}L directly and investing ₹{results['option3']['remaining_own_capital_invested']:.1f}L."
+            elif results['option3']['loan_amount'] == 0 and results['option3']['remaining_own_capital_invested'] == 0:
+                return f"💡 Option 3 (Custom Contribution) is recommended - you can fully fund the project with ₹{results['option3']['capital_used']:.1f}L directly, with no loan needed and no remaining capital to invest."
+            elif results['option3']['loan_amount'] == 0 and results['option3']['remaining_own_capital_invested'] > 0:
+                return f"💡 Option 3 (Custom Contribution) is recommended - you fully fund the project directly and invest the remaining ₹{results['option3']['remaining_own_capital_invested']:.1f}L of your capital."
+            else: # Fallback for unexpected scenarios
+                return "💡 Option 3 (Custom Contribution) is recommended - provides the lowest net cost for your customized approach."
+
 
     def print_detailed_report(self, inputs, results):
         """Print comprehensive analysis report using st.write"""
@@ -214,6 +329,7 @@ class ProjectFinancingCalculator:
         st.write(f"**Investment Type:** {inputs['investment_type']}")
         st.write(f"**Investment Return:** {inputs['investment_return']:.2f}% p.a.")
         st.write(f"**Tax Rate:** {inputs['tax_rate']:.0f}%")
+        st.write(f"**Custom Capital Contribution (Option 3):** ₹{inputs['custom_capital_contribution']:.1f} lakh") # NEW
 
         investment_details = self.investment_options[inputs['investment_type']]
         st.markdown("##### Investment Details:")
@@ -231,7 +347,7 @@ class ProjectFinancingCalculator:
             st.write(f"**Total Payment:** ₹{results['option1']['total_payment']/100000:.2f} lakh")
             st.write(f"**Total Interest:** ₹{results['option1']['total_interest']:.1f} lakh")
         else:
-            st.write("No loan required for Option 1.")
+            st.write("No loan required for Option 1 (project fully funded by own capital).")
         st.write(f"**Capital Used:** ₹{results['option1']['capital_used']:.1f} lakh")
         st.markdown(f"**NET COST:** ₹{results['option1']['net_outflow']:.2f} lakh")
 
@@ -252,25 +368,57 @@ class ProjectFinancingCalculator:
 
         st.markdown("---")
 
-        # Final Recommendation
+        # Option 3 Analysis (NEW SECTION)
+        st.markdown(f"#### 💡 OPTION 3: Custom Capital (₹{results['option3']['capital_used']:.1f}L) + Loan")
+        st.write(f"**Capital Used Directly:** ₹{results['option3']['capital_used']:.1f} lakh")
+        st.write(f"**Loan Amount:** ₹{results['option3']['loan_amount']:.1f} lakh")
+        if results['option3']['loan_amount'] > 0:
+            st.write(f"**Monthly EMI:** ₹{results['option3']['emi']:,.0f}")
+            st.write(f"**Total Payment:** ₹{results['option3']['total_payment']/100000:.2f} lakh")
+            st.write(f"**Total Interest:** ₹{results['option3']['total_interest']:.1f} lakh")
+        else:
+            st.write("No loan required for Option 3 (project fully funded by direct capital).")
+
+        if results['option3']['remaining_own_capital_invested'] > 0:
+            st.markdown("##### Investment Analysis (Remaining Capital):")
+            st.write(f" - **Initial Investment:** ₹{results['option3']['remaining_own_capital_invested']:.1f} lakh")
+            st.write(f" - **Maturity Value:** ₹{results['option3']['investment_maturity']:.2f} lakh")
+            st.write(f" - **Gross Gain:** ₹{results['option3']['investment_gain']:.2f} lakh")
+            st.write(f" - **Post-Tax Gain:** ₹{results['option3']['post_tax_gain']:.2f} lakh")
+        else:
+            st.write("No remaining own capital to invest for Option 3.")
+
+        st.markdown(f"**NET COST:** ₹{results['option3']['net_outflow']:.2f} lakh")
+
+        st.markdown("---")
+
+        # Final Recommendation (adjusted for 3 options)
         st.markdown("#### ✅ Recommendation:")
         recommendation_text = self.get_recommendation_text(results, inputs)
         st.success(recommendation_text)
-        st.write(f"**Potential Savings:** ₹{results['savings']:.2f} lakh")
+        st.write(f"**Potential Savings (compared to worst option):** ₹{results['savings']:.2f} lakh")
 
-        # Additional Insights
+        # Additional Insights (adjusted for 3 options)
         st.markdown("#### 🔍 Key Insights:")
         st.write(f"**Interest Rate Spread:** {results['interest_spread']:.2f}% (Loan Rate - Investment Return)")
 
         if results['recommendation'] == 'option1':
-            st.write(" - ✓ Lower total cost")
+            st.write(" - ✓ Lower total cost (by using all own capital directly)")
             st.warning(" - ⚠ Capital gets locked in project")
             st.warning(" - ⚠ Reduced liquidity")
-        else:
-            st.write(f" - ✓ Maintains full liquidity of ₹{inputs['own_capital']:.1f}L")
+        elif results['recommendation'] == 'option2':
+            st.write(" - ✓ Maintains full liquidity of ₹{:.1f}L".format(inputs['own_capital']))
             st.write(" - ✓ Emergency funds available")
             st.write(" - ✓ Opportunity for better investments")
             st.warning(" - ⚠ Higher total interest outgo")
+        else: # Option 3 is recommended
+            st.write(" - ✓ Optimal balance of direct capital use and liquidity.")
+            st.write(" - ✓ Uses ₹{:.1f}L directly, keeping ₹{:.1f}L invested.".format(results['option3']['capital_used'], results['option3']['remaining_own_capital_invested']))
+            st.write(" - ✓ Potential for customized financial strategy.")
+            if results['option3']['loan_amount'] > 0:
+                st.warning(" - ⚠ Incurs loan interest on partial loan.")
+            if results['option3']['remaining_own_capital_invested'] > 0 and results['interest_spread'] > 0:
+                st.warning(" - ⚠ Investment gains might be lower than loan interest if spread is positive.")
 
         st.markdown("---")
 
@@ -282,11 +430,15 @@ class ProjectFinancingCalculator:
 
         fig, ((ax1, ax2), (ax3, ax4)) = plt.subplots(2, 2, figsize=(15, 12))
 
-        # 1. Net Cost Comparison
-        options = ['Option 1\n(Own Capital)', 'Option 2\n(Invest + Loan)']
-        costs = [results['option1']['net_outflow'], results['option2']['net_outflow']]
-        colors = ['#2E8B57' if results['recommendation'] == 'option1' else '#FF6B6B',
-                  '#2E8B57' if results['recommendation'] == 'option2' else '#FF6B6B']
+        # 1. Net Cost Comparison - ADD OPTION 3
+        options = ['Option 1\n(Own Capital)', 'Option 2\n(Invest + Loan)', 'Option 3\n(Custom + Loan)'] # ADD NEW OPTION
+        costs = [results['option1']['net_outflow'], results['option2']['net_outflow'], results['option3']['net_outflow']] # ADD OPTION 3 COST
+        
+        # Dynamic colors based on recommendation
+        colors = []
+        if results['recommendation'] == 'option1': colors.extend(['#2E8B57', '#FF6B6B', '#FF6B6B'])
+        elif results['recommendation'] == 'option2': colors.extend(['#FF6B6B', '#2E8B57', '#FF6B6B'])
+        else: colors.extend(['#FF6B6B', '#FF6B6B', '#2E8B57']) # Option 3 recommended
 
         bars1 = ax1.bar(options, costs, color=colors, alpha=0.7, edgecolor='black')
         ax1.set_title('Net Cost Comparison', fontsize=14, fontweight='bold')
@@ -297,9 +449,11 @@ class ProjectFinancingCalculator:
             ax1.text(bar.get_x() + bar.get_width()/2., height + 0.5,
                      f'₹{cost:.1f}L', ha='center', va='bottom', fontweight='bold')
 
-        # 2. EMI Comparison
-        emis = [results['option1']['emi'], results['option2']['emi']]
-        bars2 = ax2.bar(options, emis, color=['#4CAF50', '#FF9800'], alpha=0.7, edgecolor='black')
+        # 2. EMI Comparison (add Option 3 EMI)
+        emis = [results['option1']['emi'], results['option2']['emi'], results['option3']['emi']] # ADD OPTION 3 EMI
+        # Adjust colors for EMI if needed, or keep generic
+        emi_colors = ['#4CAF50', '#FF9800', '#2196F3'] # Green, Orange, Blue for 1, 2, 3
+        bars2 = ax2.bar(options, emis, color=emi_colors, alpha=0.7, edgecolor='black')
         ax2.set_title('Monthly EMI Comparison', fontsize=14, fontweight='bold')
         ax2.set_ylabel('Monthly EMI (₹)')
 
@@ -308,30 +462,36 @@ class ProjectFinancingCalculator:
             ax2.text(bar.get_x() + bar.get_width()/2., height + 5000,
                      f'₹{emi:,.0f}', ha='center', va='bottom', fontweight='bold')
 
-        # 3. Year-wise Analysis
+
+        # 3. Year-wise Analysis - ADD OPTION 3 Interest and Investment Value
         ax3.plot(df['Year'], df['Option1_Interest_Paid'], marker='o',
                  linewidth=2, label='Option 1 Interest', color='#2196F3')
         ax3.plot(df['Year'], df['Option2_Interest_Paid'], marker='s',
                  linewidth=2, label='Option 2 Interest', color='#F44336')
-        ax3.plot(df['Year'], df['Investment_Value'], marker='^',
-                 linewidth=2, label='Investment Value', color='#4CAF50')
+        ax3.plot(df['Year'], df['Option3_Interest_Paid'], marker='D', # NEW MARKER
+                 linewidth=2, label='Option 3 Interest', color='#9C27B0') # NEW COLOR
+        ax3.plot(df['Year'], df['Investment_Value_Option2'], marker='^',
+                 linewidth=2, label='Option 2 Investment Value', color='#4CAF50') # Renamed label
+        ax3.plot(df['Year'], df['Investment_Value_Option3'], marker='v', # NEW MARKER
+                 linewidth=2, label='Option 3 Investment Value', color='#FFC107') # NEW COLOR
 
-        ax3.set_title('Cost Evolution Over Time', fontsize=14, fontweight='bold')
+
+        ax3.set_title('Cost & Investment Evolution Over Time', fontsize=14, fontweight='bold') # Adjusted title
         ax3.set_xlabel('Year')
         ax3.set_ylabel('Amount (₹ lakh)')
         ax3.legend()
         ax3.grid(True, alpha=0.3)
 
-        # 4. Break-even Analysis
-        net_costs_option2 = df['Option2_Net_Cost'].values
-        option1_cost = results['option1']['net_outflow']
-
-        ax4.plot(df['Year'], [option1_cost] * len(df),
+        # 4. Break-even Analysis - ADD OPTION 3 Net Cost
+        ax4.plot(df['Year'], df['Option1_Net_Cost'], # Use the new cumulative net cost
                  linewidth=3, label='Option 1 Net Cost', color='#2196F3', linestyle='--')
-        ax4.plot(df['Year'], net_costs_option2, marker='o',
+        ax4.plot(df['Year'], df['Option2_Net_Cost'], marker='o', # Use the new cumulative net cost
                  linewidth=2, label='Option 2 Net Cost', color='#F44336')
+        ax4.plot(df['Year'], df['Option3_Net_Cost'], marker='D', # NEW
+                 linewidth=2, label='Option 3 Net Cost', color='#9C27B0', linestyle='-.') # NEW
 
-        ax4.set_title('Break-even Analysis', fontsize=14, fontweight='bold')
+
+        ax4.set_title('Cumulative Net Cost Over Time', fontsize=14, fontweight='bold') # Adjusted title
         ax4.set_xlabel('Year')
         ax4.set_ylabel('Net Cost (₹ lakh)')
         ax4.legend()
@@ -349,15 +509,24 @@ class ProjectFinancingCalculator:
         # Create an in-memory Excel file
         output = io.BytesIO()
         with pd.ExcelWriter(output, engine='openpyxl') as writer:
-            # Summary sheet
+            # Summary sheet - ADD OPTION 3 PARAMETERS
             summary_data = {
                 'Parameter': [
                     'Project Cost (₹ lakh)', 'Own Capital (₹ lakh)', 'Loan Rate (%)',
                     'Tenure (years)', 'Investment Type', 'Investment Return (%)', 'Tax Rate (%)',
                     '', 'OPTION 1 - Use Own Capital', 'Loan Amount (₹ lakh)', 'Monthly EMI (₹)',
-                    'Total Interest (₹ lakh)', 'Net Cost (₹ lakh)', '', 'OPTION 2 - Invest + Loan',
-                    'Loan Amount (₹ lakh)', 'Monthly EMI (₹)', 'Total Interest (₹ lakh)',
-                    'Investment Maturity (₹ lakh)', 'Post-tax Gain (₹ lakh)', 'Net Cost (₹ lakh)',
+                    'Total Interest (₹ lakh)', 'Net Cost (₹ lakh)',
+                    '', 'OPTION 2 - Invest + Loan', 'Loan Amount (₹ lakh)', 'Monthly EMI (₹)',
+                    'Total Interest (₹ lakh)', 'Investment Maturity (₹ lakh)', 'Post-tax Gain (₹ lakh)', 'Net Cost (₹ lakh)',
+                    '', 'OPTION 3 - Custom Capital Contribution + Loan', # NEW
+                    'Custom Capital Used (₹ lakh)', # NEW
+                    'Loan Amount (₹ lakh)', # NEW
+                    'Monthly EMI (₹)', # NEW
+                    'Total Interest (₹ lakh)', # NEW
+                    'Remaining Own Capital Invested (₹ lakh)', # NEW
+                    'Investment Maturity (₹ lakh) (Option 3)', # NEW
+                    'Post-tax Gain (₹ lakh) (Option 3)', # NEW
+                    'Net Cost (₹ lakh) (Option 3)', # NEW
                     '', 'RECOMMENDATION', 'Better Option', 'Savings (₹ lakh)'
                 ],
                 'Value': [
@@ -368,15 +537,25 @@ class ProjectFinancingCalculator:
                     results['option1']['net_outflow'], '', '', results['option2']['loan_amount'],
                     f"₹{results['option2']['emi']:,.0f}", results['option2']['total_interest'],
                     results['option2']['investment_maturity'], results['option2']['post_tax_gain'],
-                    results['option2']['net_outflow'], '', '',
-                    'Option 1' if results['recommendation'] == 'option1' else 'Option 2',
+                    results['option2']['net_outflow'],
+                    '', '', # NEW SECTION
+                    results['option3']['capital_used'], # NEW
+                    results['option3']['loan_amount'], # NEW
+                    f"₹{results['option3']['emi']:,.0f}", # NEW
+                    results['option3']['total_interest'], # NEW
+                    results['option3']['remaining_own_capital_invested'], # NEW
+                    results['option3']['investment_maturity'], # NEW
+                    results['option3']['post_tax_gain'], # NEW
+                    results['option3']['net_outflow'], # NEW
+                    '', '',
+                    'Option 1' if results['recommendation'] == 'option1' else ('Option 2' if results['recommendation'] == 'option2' else 'Option 3'), # UPDATE
                     results['savings']
                 ]
             }
 
             pd.DataFrame(summary_data).to_excel(writer, sheet_name='Summary', index=False)
 
-            # Year-wise analysis
+            # Year-wise analysis (df already contains the new columns from generate_year_wise_data)
             df.to_excel(writer, sheet_name='Year_wise_Analysis', index=False)
 
             # Investment options reference
@@ -399,9 +578,10 @@ def main():
     st.set_page_config(layout="wide", page_title="Project Financing Calculator")
     st.title("🏦 Project Financing Calculator")
     st.markdown("""
-        This tool helps you compare two project financing strategies:
-        1.  **Option 1:** Use your own capital first, then take a loan for the remaining project cost.
-        2.  **Option 2:** Invest your own capital and take a full loan for the entire project cost.
+        This tool helps you compare three project financing strategies:
+        1.  **Option 1:** Use all your own capital first, then take a loan for the remaining project cost.
+        2.  **Option 2:** Invest all your own capital and take a full loan for the entire project cost.
+        3.  **Option 3:** You specify a custom amount of your own capital to use directly, and take a loan for the rest. Any remaining own capital is invested.
         
         Enter your project details below to see a detailed comparison and recommendation.
     """)
@@ -433,6 +613,19 @@ def main():
             min_value=1, max_value=30, value=7, step=1,
             help="Duration of the loan in years"
         )
+
+        st.markdown("---")
+        st.subheader("Option 3: Custom Capital Contribution")
+        custom_capital_contribution = st.number_input(
+            "Amount of your capital to use directly for project (₹ lakh):",
+            min_value=0.0,
+            max_value=min(project_cost, own_capital),
+            value=min(project_cost, own_capital), # Default to using all available or needed
+            step=5.0,
+            format="%.1f",
+            help="Specify how much of your own capital you want to use directly for the project. The rest will be loaned."
+        )
+
 
     with col2:
         st.header("Investment Details")
@@ -468,7 +661,8 @@ def main():
         'loan_tenure': int(loan_tenure),
         'investment_type': investment_type,
         'investment_return': float(investment_return),
-        'tax_rate': float(tax_rate)
+        'tax_rate': float(tax_rate),
+        'custom_capital_contribution': float(custom_capital_contribution) # ADD THIS LINE
     }
 
     st.markdown("---")
