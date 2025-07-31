@@ -619,7 +619,7 @@ class ProjectFinancingCalculator:
             st.write(" - **Optimization Moves & Additional Value Levers:** Consider phased loan drawdown or capital deployment strategies to minimize idle funds and optimize interest costs or investment gains.")
         st.markdown("---")
 
-   def generate_pdf_report(self, inputs, results, year_wise_df):
+def generate_pdf_report(self, inputs, results, year_wise_df):
         """Generates a PDF report using ReportLab."""
         buffer = io.BytesIO()
         doc = SimpleDocTemplate(buffer, pagesize=A4,
