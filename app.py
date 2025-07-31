@@ -83,9 +83,8 @@ class ProjectFinancingCalculator:
 
     def generate_year_wise_data(self, inputs, results):
         """Generate year-wise breakdown for analysis"""
-        data = []
-        # Update header row to include new cumulative net costs for plotting
-        data.append([
+        # Define column names explicitly for DataFrame creation
+        column_names = [
             'Year',
             'Option1_Interest_Paid',
             'Option2_Interest_Paid',
@@ -96,10 +95,11 @@ class ProjectFinancingCalculator:
             'Investment_Gain_Option3',
             'Post_Tax_Gain_Option2',
             'Post_Tax_Gain_Option3',
-            'Option1_Net_Cost_Cumulative', # Renamed for clarity
-            'Option2_Net_Cost_Cumulative', # Renamed for clarity
-            'Option3_Net_Cost_Cumulative' # Renamed for clarity
-        ])
+            'Option1_Net_Cost_Cumulative',
+            'Option2_Net_Cost_Cumulative',
+            'Option3_Net_Cost_Cumulative'
+        ]
+        data = []
 
         for year in range(inputs['loan_tenure'] + 1):
             # Option 1 calculations (cumulative)
@@ -107,7 +107,13 @@ class ProjectFinancingCalculator:
             option1_paid_cumulative = results['option1']['emi'] * 12 * year
             option1_principal_paid_cumulative = min(option1_paid_cumulative, option1_loan_amount_actual_at_start)
             option1_interest_paid_cumulative = max(0, option1_paid_cumulative - option1_principal_paid_cumulative) / 100000 # Convert to lakh
-            option1_net_cost_cumulative = (inputs['own_capital'] * 100000 + option1_interest_paid_cumulative * 100000) / 100000
+            
+            # Recalculate Option1_Net_Cost_Cumulative based on new definition
+            # Net Cost = Project Cost + Effective Total Interest - Post-Tax Investment Gains (0 for Option 1)
+            option1_effective_interest_cumulative = option1_interest_paid_cumulative
+            if inputs['loan_interest_deductible']:
+                option1_effective_interest_cumulative *= (1 - inputs['tax_rate']/100)
+            option1_net_cost_cumulative = inputs['project_cost'] + option1_effective_interest_cumulative
 
 
             # Option 2 calculations (cumulative)
@@ -115,6 +121,10 @@ class ProjectFinancingCalculator:
             option2_paid_cumulative = results['option2']['emi'] * 12 * year
             option2_principal_paid_cumulative = min(option2_paid_cumulative, option2_loan_amount_actual_at_start)
             option2_interest_paid_cumulative = max(0, option2_paid_cumulative - option2_principal_paid_cumulative) / 100000 # Convert to lakh
+
+            option2_effective_interest_cumulative = option2_interest_paid_cumulative
+            if inputs['loan_interest_deductible']:
+                option2_effective_interest_cumulative *= (1 - inputs['tax_rate']/100)
 
             investment_value_option2 = inputs['own_capital']
             if year > 0:
@@ -126,7 +136,9 @@ class ProjectFinancingCalculator:
                 )
             investment_gain_option2 = investment_value_option2 - inputs['own_capital']
             post_tax_gain_option2 = investment_gain_option2 * (1 - inputs['tax_rate']/100)
-            option2_net_cost_cumulative = option2_interest_paid_cumulative - post_tax_gain_option2
+            
+            # Recalculate Option2_Net_Cost_Cumulative based on new definition
+            option2_net_cost_cumulative = inputs['project_cost'] + option2_effective_interest_cumulative - post_tax_gain_option2
 
 
             # Option 3 calculations (cumulative)
@@ -136,6 +148,10 @@ class ProjectFinancingCalculator:
             option3_paid_cumulative = results['option3']['emi'] * 12 * year if year > 0 else 0
             option3_principal_paid_cumulative = min(option3_paid_cumulative, option3_loan_amount_actual_at_start)
             option3_interest_paid_cumulative = max(0, option3_paid_cumulative - option3_principal_paid_cumulative) / 100000 # Convert to lakh
+
+            option3_effective_interest_cumulative = option3_interest_paid_cumulative
+            if inputs['loan_interest_deductible']:
+                option3_effective_interest_cumulative *= (1 - inputs['tax_rate']/100)
 
             option3_remaining_own_capital = inputs['own_capital'] - option3_capital_used
             investment_value_option3 = option3_remaining_own_capital # At year 0
@@ -149,27 +165,28 @@ class ProjectFinancingCalculator:
             investment_gain_option3 = investment_value_option3 - option3_remaining_own_capital
             post_tax_gain_option3 = investment_gain_option3 * (1 - inputs['tax_rate']/100)
             
-            # Option 3 Net Cost year-wise (cumulative capital used + cumulative interest - cumulative post-tax gain)
-            option3_net_cost_cumulative = option3_capital_used + option3_interest_paid_cumulative - post_tax_gain_option3
+            # Recalculate Option3_Net_Cost_Cumulative based on new definition
+            option3_net_cost_cumulative = inputs['project_cost'] + option3_effective_interest_cumulative - post_tax_gain_option3
 
 
-            data.append({
-                'Year': year,
-                'Option1_Interest_Paid': option1_interest_paid_cumulative,
-                'Option2_Interest_Paid': option2_interest_paid_cumulative,
-                'Option3_Interest_Paid': option3_interest_paid_cumulative,
-                'Investment_Value_Option2': investment_value_option2,
-                'Investment_Value_Option3': investment_value_option3,
-                'Investment_Gain_Option2': investment_gain_option2,
-                'Investment_Gain_Option3': investment_gain_option3,
-                'Post_Tax_Gain_Option2': post_tax_gain_option2,
-                'Post_Tax_Gain_Option3': post_tax_gain_option3,
-                'Option1_Net_Cost_Cumulative': option1_net_cost_cumulative,
-                'Option2_Net_Cost_Cumulative': option2_net_cost_cumulative,
-                'Option3_Net_Cost_Cumulative': option3_net_cost_cumulative
-            })
+            data.append([
+                year,
+                option1_interest_paid_cumulative,
+                option2_interest_paid_cumulative,
+                option3_interest_paid_cumulative,
+                investment_value_option2,
+                investment_value_option3,
+                investment_gain_option2,
+                investment_gain_option3,
+                post_tax_gain_option2,
+                post_tax_gain_option3,
+                option1_net_cost_cumulative,
+                option2_net_cost_cumulative,
+                option3_net_cost_cumulative
+            ])
 
-        return pd.DataFrame(data)
+        # Create DataFrame with explicit column names
+        return pd.DataFrame(data, columns=column_names)
 
     def calculate_comparison(self, inputs):
         """Main calculation function"""
@@ -179,15 +196,17 @@ class ProjectFinancingCalculator:
         option1_emi = self.calculate_emi(option1_loan_amount_actual, inputs['loan_rate'], inputs['loan_tenure'])
         option1_total_payment = option1_emi * 12 * inputs['loan_tenure']
         option1_total_interest = option1_total_payment - option1_loan_amount_actual
+        
         # Apply tax deductibility for loan interest if applicable
         option1_effective_interest = option1_total_interest
         if inputs['loan_interest_deductible']:
             option1_effective_interest *= (1 - inputs['tax_rate']/100)
-        option1_net_outflow = (inputs['own_capital'] * 100000 + option1_effective_interest) / 100000 # Convert own_capital to actual
         
-        # Convert back to lakh for results
         option1_total_interest_lakh = option1_total_interest / 100000
         option1_effective_interest_lakh = option1_effective_interest / 100000
+
+        # NEW NET COST DEFINITION: Project Cost + Effective Total Interest - Post-Tax Investment Gains (0 for Option 1)
+        option1_net_outflow = inputs['project_cost'] + option1_effective_interest_lakh
 
 
         # Option 2: Invest own capital + take full loan
@@ -196,6 +215,7 @@ class ProjectFinancingCalculator:
         option2_emi = self.calculate_emi(option2_loan_amount_actual, inputs['loan_rate'], inputs['loan_tenure'])
         option2_total_payment = option2_emi * 12 * inputs['loan_tenure']
         option2_total_interest = option2_total_payment - option2_loan_amount_actual
+        
         # Apply tax deductibility for loan interest if applicable
         option2_effective_interest = option2_total_interest
         if inputs['loan_interest_deductible']:
@@ -209,9 +229,10 @@ class ProjectFinancingCalculator:
             self.investment_options[inputs['investment_type']]['compounding']
         )
         investment_gain_option2 = investment_maturity_value_option2 - inputs['own_capital']
-        post_tax_gain_option2 = investment_gain_option2 * (1 - inputs['tax_rate']/100) # Already post-tax
+        post_tax_gain_option2 = investment_gain_option2 * (1 - inputs['tax_rate']/100)
 
-        option2_net_outflow = (option2_effective_interest / 100000) - post_tax_gain_option2 # Convert effective interest to lakh
+        # NEW NET COST DEFINITION: Project Cost + Effective Total Interest - Post-Tax Investment Gains
+        option2_net_outflow = inputs['project_cost'] + (option2_effective_interest / 100000) - post_tax_gain_option2
 
 
         # Option 3: Custom Capital Contribution + Loan
@@ -222,10 +243,12 @@ class ProjectFinancingCalculator:
         option3_emi = self.calculate_emi(option3_loan_amount_actual, inputs['loan_rate'], inputs['loan_tenure'])
         option3_total_payment = option3_emi * 12 * inputs['loan_tenure']
         option3_total_interest = option3_total_payment - option3_loan_amount_actual
+        
         # Apply tax deductibility for loan interest if applicable
         option3_effective_interest = option3_total_interest
         if inputs['loan_interest_deductible']:
             option3_effective_interest *= (1 - inputs['tax_rate']/100)
+        
         option3_total_interest_lakh = option3_total_interest / 100000
         option3_effective_interest_lakh = option3_effective_interest / 100000
 
@@ -246,8 +269,8 @@ class ProjectFinancingCalculator:
             option3_investment_gain = option3_investment_maturity_value - option3_remaining_own_capital
             option3_post_tax_gain = option3_investment_gain * (1 - inputs['tax_rate']/100)
 
-        # Net outflow for Option 3: Capital used + effective loan interest - investment gains (if any)
-        option3_net_outflow = option3_capital_used + option3_effective_interest_lakh - option3_post_tax_gain
+        # NEW NET COST DEFINITION: Project Cost + Effective Total Interest - Post-Tax Investment Gains
+        option3_net_outflow = inputs['project_cost'] + option3_effective_interest_lakh - option3_post_tax_gain
 
         # Calculate effective rates for display
         effective_loan_rate = (option2_effective_interest / option2_loan_amount_actual) * 100 if option2_loan_amount_actual > 0 else 0
@@ -289,7 +312,7 @@ class ProjectFinancingCalculator:
                 'total_interest': option1_total_interest_lakh,
                 'effective_interest': option1_effective_interest_lakh,
                 'net_outflow': option1_net_outflow,
-                'capital_used': inputs['own_capital']
+                'capital_used': inputs['own_capital'] # This is capital used directly for project
             },
             'option2': {
                 'loan_amount': option2_loan_amount_lakh,
@@ -300,16 +323,18 @@ class ProjectFinancingCalculator:
                 'investment_maturity': investment_maturity_value_option2,
                 'investment_gain': investment_gain_option2,
                 'post_tax_gain': post_tax_gain_option2,
-                'net_outflow': option2_net_outflow
+                'net_outflow': option2_net_outflow,
+                'capital_used': 0, # No own capital used directly for project
+                'capital_invested': inputs['own_capital'] # All own capital is invested
             },
             'option3': {
-                'capital_used': option3_capital_used,
+                'capital_used': option3_capital_used, # Capital used directly for project
                 'loan_amount': option3_loan_amount_lakh,
                 'emi': option3_emi,
                 'total_payment': option3_total_payment,
                 'total_interest': option3_total_interest_lakh,
                 'effective_interest': option3_effective_interest_lakh,
-                'remaining_own_capital_invested': option3_remaining_own_capital,
+                'remaining_own_capital_invested': option3_remaining_own_capital, # Capital invested
                 'investment_maturity': option3_investment_maturity_value,
                 'investment_gain': option3_investment_gain,
                 'post_tax_gain': option3_post_tax_gain,
@@ -376,56 +401,52 @@ class ProjectFinancingCalculator:
         st.markdown("#### 📈 Financing Options Comparison")
         comparison_data = {
             'Metric': [
-                'Project Cost Coverage',
+                'Capital Used Directly for Project', # NEW ROW
+                'Own Capital Invested', # NEW ROW
                 'Loan Amount',
                 'Monthly EMI',
                 'Gross Total Interest',
                 'Effective Total Interest (After Tax)',
-                'Initial Investment (Own Capital)',
-                'Remaining Own Capital Invested',
-                'Investment Maturity Value',
-                'Gross Investment Gain',
-                'Post-Tax Investment Gain',
-                'NET COST'
+                'Investment Maturity Value (from invested capital)', # Clarified
+                'Gross Investment Gain (from invested capital)', # Clarified
+                'Post-Tax Investment Gain (from invested capital)', # Clarified
+                '**NET COST**' # Bolding moved to metric
             ],
             'Option 1: Own Capital + Small Loan': [
-                f"₹{inputs['own_capital']:.1f}L Own, ₹{results['option1']['loan_amount']:.1f}L Loan",
+                f"₹{results['option1']['capital_used']:.1f} lakh", # Use actual capital used directly
+                "₹0.0 lakh", # No capital invested
                 f"₹{results['option1']['loan_amount']:.1f} lakh",
                 f"₹{results['option1']['emi']:,.0f}",
                 f"₹{results['option1']['total_interest']:.1f} lakh",
                 f"₹{results['option1']['effective_interest']:.1f} lakh",
-                f"₹{inputs['own_capital']:.1f} lakh (used directly)",
-                "N/A",
-                "N/A",
-                "N/A",
-                "N/A",
-                f"**₹{results['option1']['net_outflow']:.2f} lakh**"
+                "₹0.0 lakh", # N/A changed to 0
+                "₹0.0 lakh", # N/A changed to 0
+                "₹0.0 lakh", # N/A changed to 0
+                f"₹{results['option1']['net_outflow']:.2f} lakh" # Removed **
             ],
             'Option 2: Invest Capital + Full Loan': [
-                f"₹{inputs['project_cost']:.1f}L Loan, ₹{inputs['own_capital']:.1f}L Invested",
+                "₹0.0 lakh", # No capital used directly
+                f"₹{results['option2']['capital_invested']:.1f} lakh", # Use actual capital invested
                 f"₹{results['option2']['loan_amount']:.1f} lakh",
                 f"₹{results['option2']['emi']:,.0f}",
                 f"₹{results['option2']['total_interest']:.1f} lakh",
                 f"₹{results['option2']['effective_interest']:.1f} lakh",
-                f"₹{inputs['own_capital']:.1f} lakh (invested)",
-                "N/A",
                 f"₹{results['option2']['investment_maturity']:.2f} lakh",
                 f"₹{results['option2']['investment_gain']:.2f} lakh",
                 f"₹{results['option2']['post_tax_gain']:.2f} lakh",
-                f"**₹{results['option2']['net_outflow']:.2f} lakh**"
+                f"₹{results['option2']['net_outflow']:.2f} lakh" # Removed **
             ],
             'Option 3: Custom Capital + Loan': [
-                f"₹{results['option3']['capital_used']:.1f}L Own, ₹{results['option3']['loan_amount']:.1f}L Loan, ₹{results['option3']['remaining_own_capital_invested']:.1f}L Invested",
+                f"₹{results['option3']['capital_used']:.1f} lakh", # Use actual capital used directly
+                f"₹{results['option3']['remaining_own_capital_invested']:.1f} lakh", # Use actual capital invested
                 f"₹{results['option3']['loan_amount']:.1f} lakh",
                 f"₹{results['option3']['emi']:,.0f}",
                 f"₹{results['option3']['total_interest']:.1f} lakh",
                 f"₹{results['option3']['effective_interest']:.1f} lakh",
-                f"₹{results['option3']['capital_used']:.1f} lakh (used directly)",
-                f"₹{results['option3']['remaining_own_capital_invested']:.1f} lakh",
-                f"₹{results['option3']['investment_maturity']:.2f} lakh" if results['option3']['remaining_own_capital_invested'] > 0 else "N/A",
-                f"₹{results['option3']['investment_gain']:.2f} lakh" if results['option3']['remaining_own_capital_invested'] > 0 else "N/A",
-                f"₹{results['option3']['post_tax_gain']:.2f} lakh" if results['option3']['remaining_own_capital_invested'] > 0 else "N/A",
-                f"**₹{results['option3']['net_outflow']:.2f} lakh**"
+                f"₹{results['option3']['investment_maturity']:.2f} lakh" if results['option3']['remaining_own_capital_invested'] > 0 else "₹0.0 lakh", # N/A changed to 0
+                f"₹{results['option3']['investment_gain']:.2f} lakh" if results['option3']['remaining_own_capital_invested'] > 0 else "₹0.0 lakh", # N/A changed to 0
+                f"₹{results['option3']['post_tax_gain']:.2f} lakh" if results['option3']['remaining_own_capital_invested'] > 0 else "₹0.0 lakh", # N/A changed to 0
+                f"₹{results['option3']['net_outflow']:.2f} lakh" # Removed **
             ]
         }
         comparison_df = pd.DataFrame(comparison_data).set_index('Metric')
@@ -434,12 +455,16 @@ class ProjectFinancingCalculator:
         # Net Cost Definition Expander
         with st.expander("❓ What is 'Net Cost' in this context?"):
             st.markdown("""
-            **"Net Cost"** represents your ultimate **out-of-pocket expense** to fund the project over the loan tenure.
-            It factors in:
-            * **All loan-related costs:** Specifically, the **effective interest** paid on the loan *after* considering any tax deductibility.
-            * **Offsetting investment gains:** Any **post-tax gains** generated from investing your own capital are subtracted from the total costs.
+            **"Net Cost"** represents your ultimate **out-of-pocket expense to fund the project** over the loan tenure.
+            It is calculated as:
+            `Net Cost = Total Project Cost + Effective Total Loan Interest (After Tax) - Post-Tax Investment Gains`
             
-            This metric provides a true bottom-line figure for each financing option, allowing for direct and comparable evaluation.
+            Let's break that down:
+            * **Total Project Cost:** The fundamental cost of acquiring or building the project.
+            * **Effective Total Loan Interest (After Tax):** This is the gross interest paid on the loan, reduced by any tax savings if the loan interest is tax-deductible as a business expense (based on your input `Tax Rate`).
+            * **Post-Tax Investment Gains:** Any net profits you earn from investing your own capital (after taxes) are subtracted, as these gains effectively reduce your overall cost.
+            
+            This metric provides a true bottom-line figure for each financing option, allowing for direct and comparable evaluation of what you *truly spent* to get the project done.
             """)
         st.markdown("---")
 
@@ -601,18 +626,25 @@ class ProjectFinancingCalculator:
                     'Prepayment Penalty (%)',
                     'Minimum Liquidity Target (₹ lakh)',
                     'Tenure (years)', 'Investment Type', 'Investment Return (%)', 'Tax Rate (%)',
-                    '', 'OPTION 1 - Use Own Capital', 'Loan Amount (₹ lakh)', 'Monthly EMI (₹)',
+                    'Custom Capital Contribution (Option 3) (₹ lakh)', # Added here as well for consistency
+                    '', 'OPTION 1 - Use Own Capital',
+                    'Capital Used Directly for Project (₹ lakh)', # NEW
+                    'Own Capital Invested (₹ lakh)', # NEW
+                    'Loan Amount (₹ lakh)', 'Monthly EMI (₹)',
                     'Gross Total Interest (₹ lakh)', 'Effective Total Interest (After Tax) (₹ lakh)',
                     'Net Cost (₹ lakh)',
-                    '', 'OPTION 2 - Invest + Loan', 'Loan Amount (₹ lakh)', 'Monthly EMI (₹)',
+                    '', 'OPTION 2 - Invest + Loan',
+                    'Capital Used Directly for Project (₹ lakh)', # NEW
+                    'Own Capital Invested (₹ lakh)', # NEW
+                    'Loan Amount (₹ lakh)', 'Monthly EMI (₹)',
                     'Gross Total Interest (₹ lakh)', 'Effective Total Interest (After Tax) (₹ lakh)',
                     'Investment Maturity (₹ lakh)', 'Post-tax Gain (₹ lakh)', 'Net Cost (₹ lakh)',
                     '', 'OPTION 3 - Custom Capital Contribution + Loan',
-                    'Custom Capital Used (₹ lakh)',
+                    'Capital Used Directly for Project (₹ lakh)', # NEW
+                    'Own Capital Invested (₹ lakh)', # NEW
                     'Loan Amount (₹ lakh)',
                     'Monthly EMI (₹)',
                     'Gross Total Interest (₹ lakh)', 'Effective Total Interest (After Tax) (₹ lakh)',
-                    'Remaining Own Capital Invested (₹ lakh)',
                     'Investment Maturity (₹ lakh) (Option 3)',
                     'Post-tax Gain (₹ lakh) (Option 3)',
                     'Net Cost (₹ lakh) (Option 3)',
@@ -628,21 +660,29 @@ class ProjectFinancingCalculator:
                     inputs['prepayment_penalty_pct'],
                     inputs['min_liquidity_target'],
                     inputs['loan_tenure'], inputs['investment_type'], inputs['investment_return'],
-                    inputs['tax_rate'], '', '', results['option1']['loan_amount'],
+                    inputs['tax_rate'],
+                    inputs['custom_capital_contribution'], # Added here
+                    '', '',
+                    results['option1']['capital_used'], # NEW
+                    0.0, # NEW
+                    results['option1']['loan_amount'],
                     f"₹{results['option1']['emi']:,.0f}", results['option1']['total_interest'],
                     results['option1']['effective_interest'],
-                    results['option1']['net_outflow'], '', '', results['option2']['loan_amount'],
+                    results['option1']['net_outflow'], '', '',
+                    results['option2']['capital_used'], # NEW
+                    results['option2']['capital_invested'], # NEW
+                    results['option2']['loan_amount'],
                     f"₹{results['option2']['emi']:,.0f}", results['option2']['total_interest'],
                     results['option2']['effective_interest'],
                     results['option2']['investment_maturity'], results['option2']['post_tax_gain'],
                     results['option2']['net_outflow'],
                     '', '',
                     results['option3']['capital_used'],
+                    results['option3']['remaining_own_capital_invested'], # NEW
                     results['option3']['loan_amount'],
                     f"₹{results['option3']['emi']:,.0f}",
                     results['option3']['total_interest'],
                     results['option3']['effective_interest'],
-                    results['option3']['remaining_own_capital_invested'],
                     results['option3']['investment_maturity'],
                     results['option3']['post_tax_gain'],
                     results['option3']['net_outflow'],
