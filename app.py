@@ -627,7 +627,14 @@ class ProjectFinancingCalculator:
                                 topMargin=0.5*inch, bottomMargin=0.5*inch)
         styles = getSampleStyleSheet()
         # Custom style for small font tables
-        styles.add(ParagraphStyle(name='TableCaption', fontSize=8, alignment=TA_CENTER))
+       # Access the existing 'Italic' style and modify it
+    if 'Italic' in styles:
+        styles['Italic'].fontName = 'Helvetica-Oblique'
+        styles['Italic'].fontSize = 9
+        styles['Italic'].alignment = TA_LEFT
+    else:
+        # Fallback: if for some reason 'Italic' isn't there, add it
+        styles.add(ParagraphStyle(name='Italic', fontName='Helvetica-Oblique', fontSize=9, alignment=TA_LEFT))
         styles.add(ParagraphStyle(name='SmallTableText', fontSize=6, alignment=TA_CENTER))
         styles.add(ParagraphStyle(name='SmallTableTextLeft', fontSize=6, alignment=TA_LEFT))
 
