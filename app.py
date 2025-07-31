@@ -3,8 +3,8 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
 import numpy as np
-import streamlit as st # Import streamlit
-import io # Needed for in-memory Excel export
+import streamlit as st
+import io
 
 # For PDF generation
 from reportlab.lib.pagesizes import letter
@@ -845,3 +845,212 @@ class ProjectFinancingCalculator:
         doc.build(story)
         buffer.seek(0)
         return buffer
+
+
+def main():
+    st.set_page_config(layout="wide", page_title="Project Financing Calculator")
+    calculator = ProjectFinancingCalculator()
+
+    st.title("💰 Project Financing Strategy Calculator")
+    st.markdown("""
+        Understand the true cost of funding your project by comparing different financing strategies:
+        * **Scenario 1: Maximum Own Funding** - Use your available capital first, minimizing the loan.
+        * **Scenario 2: Maximum Leverage** - Take a full loan and invest all your own capital elsewhere.
+        * **Scenario 3: Balanced Approach** - A custom mix of own capital contribution and loan.
+    """)
+    st.markdown("---")
+
+    # --- Input Section ---
+    st.header("1. Input Project & Financial Details")
+
+    col1, col2 = st.columns(2)
+    with col1:
+        project_cost = st.number_input("Total Project Cost (in Lakhs ₹)", min_value=1.0, value=100.0, step=5.0)
+        own_capital = st.number_input("Your Own Capital Available (in Lakhs ₹)", min_value=0.0, value=50.0, step=5.0)
+        
+        # Custom Capital Contribution for Scenario 3
+        st.subheader("Scenario 3: Custom Capital Contribution")
+        custom_capital_input_type = st.radio("How would you like to define custom capital for Scenario 3?", 
+                                             ('Value (Lakhs)', 'Percentage of Own Capital (%)'), 
+                                             index=0)
+        
+        custom_capital_contribution = 0.0
+        if custom_capital_input_type == 'Value (Lakhs)':
+            custom_capital_contribution = st.number_input("Custom Capital Contribution (in Lakhs ₹)", 
+                                                            min_value=0.0, 
+                                                            max_value=own_capital, 
+                                                            value=min(25.0, own_capital), 
+                                                            step=1.0)
+        else: # Percentage
+            custom_capital_percentage = st.slider("Custom Capital Contribution (% of Own Capital)", 
+                                                  min_value=0, max_value=100, value=50, step=1)
+            custom_capital_contribution = (own_capital * custom_capital_percentage) / 100.0
+            st.info(f"This translates to: ₹{custom_capital_contribution:.1f} Lakhs")
+
+    with col2:
+        loan_rate = st.number_input("Bank Loan Interest Rate (% p.a.)", min_value=0.1, value=9.0, step=0.1)
+        loan_type = st.radio("Loan Type", ('Floating', 'Fixed'))
+        loan_tenure = st.number_input("Loan Tenure (Years)", min_value=1, value=10, step=1)
+        loan_interest_deductible = st.checkbox("Loan Interest Tax-Deductible (for business expenses)", value=True)
+        prepayment_penalty_pct = st.number_input("Prepayment Penalty (% of outstanding loan)", min_value=0.0, value=0.0, step=0.1)
+        min_liquidity_target = st.number_input("Minimum Liquidity Target (in Lakhs ₹)", min_value=0.0, value=10.0, step=1.0)
+
+    st.markdown("---")
+    st.header("2. Input Investment Details")
+    col3, col4 = st.columns(2)
+    with col3:
+        investment_types = list(calculator.investment_options.keys())
+        default_investment_index = investment_types.index('Liquid Funds') if 'Liquid Funds' in investment_types else 0
+        investment_type = st.selectbox("Select Investment Type for Own Capital", investment_types, index=default_investment_index)
+        
+        # Display default return for selected type, allow override
+        default_inv_return = calculator.investment_options[investment_type]['default_return']
+        investment_return = st.number_input(f"Expected Investment Return (% p.a. - for {investment_type})", min_value=0.0, value=default_inv_return, step=0.1)
+        
+    with col4:
+        tax_rate = st.slider("Your Applicable Tax Rate (%)", min_value=0, max_value=50, value=30, step=1)
+
+    st.markdown("---")
+
+    # Prepare inputs dictionary
+    inputs = {
+        'project_cost': project_cost,
+        'own_capital': own_capital,
+        'loan_rate': loan_rate,
+        'loan_type': loan_type,
+        'loan_tenure': loan_tenure,
+        'loan_interest_deductible': loan_interest_deductible,
+        'prepayment_penalty_pct': prepayment_penalty_pct,
+        'min_liquidity_target': min_liquidity_target,
+        'investment_type': investment_type,
+        'investment_return': investment_return,
+        'tax_rate': tax_rate,
+        'custom_capital_input_type': custom_capital_input_type,
+        'custom_capital_percentage': custom_capital_percentage if custom_capital_input_type == 'Percentage of Own Capital (%)' else 0,
+        'custom_capital_contribution': custom_capital_contribution
+    }
+
+    # --- Calculation & Display Section ---
+    st.header("3. Results")
+    
+    if st.button("Calculate Financing Scenarios"):
+        # Perform calculations
+        results = calculator.calculate_comparison(inputs)
+
+        if results: # Only proceed if calculations were successful
+            # Print detailed report
+            calculator.print_detailed_report(inputs, results)
+            
+            st.markdown("---")
+            st.header("4. Visualizations")
+
+            # --- Plotting ---
+            year_wise_df = calculator.generate_year_wise_data(inputs, results)
+            
+            col_plot1, col_plot2 = st.columns(2)
+
+            with col_plot1:
+                st.subheader("Net Effective Cost Over Years")
+                fig_cost, ax_cost = plt.subplots(figsize=(10, 6))
+                ax_cost.plot(year_wise_df['Year'], year_wise_df['Scenario1_Net_Effective_Cost_Cumulative (Lakh)'], label='Scenario 1', marker='o')
+                ax_cost.plot(year_wise_df['Year'], year_wise_df['Scenario2_Net_Effective_Cost_Cumulative (Lakh)'], label='Scenario 2', marker='x')
+                ax_cost.plot(year_wise_df['Year'], year_wise_df['Scenario3_Net_Effective_Cost_Cumulative (Lakh)'], label='Scenario 3', marker='s')
+                ax_cost.set_xlabel("Year")
+                ax_cost.set_ylabel("Cumulative Net Effective Cost (Lakh ₹)")
+                ax_cost.set_title("Cumulative Net Effective Cost for Each Scenario")
+                ax_cost.legend()
+                ax_cost.grid(True)
+                st.pyplot(fig_cost)
+
+            with col_plot2:
+                st.subheader("Cumulative Interest Paid Over Years")
+                fig_interest, ax_interest = plt.subplots(figsize=(10, 6))
+                ax_interest.plot(year_wise_df['Year'], year_wise_df['Scenario1_Interest_Paid_Cumulative (Lakh)'], label='Scenario 1', marker='o')
+                ax_interest.plot(year_wise_df['Year'], year_wise_df['Scenario2_Interest_Paid_Cumulative (Lakh)'], label='Scenario 2', marker='x')
+                ax_interest.plot(year_wise_df['Year'], year_wise_df['Scenario3_Interest_Paid_Cumulative (Lakh)'], label='Scenario 3', marker='s')
+                ax_interest.set_xlabel("Year")
+                ax_interest.set_ylabel("Cumulative Interest Paid (Lakh ₹)")
+                ax_interest.set_title("Cumulative Interest Paid for Each Scenario")
+                ax_interest.legend()
+                ax_interest.grid(True)
+                st.pyplot(fig_interest)
+
+            # Bar chart for final Net Effective Cost
+            st.subheader("Final Net Effective Cost Comparison")
+            final_costs = {
+                'Scenario 1': results['scenario1']['net_effective_cost'],
+                'Scenario 2': results['scenario2']['net_effective_cost'],
+                'Scenario 3': results['scenario3']['net_effective_cost']
+            }
+            cost_df = pd.DataFrame(final_costs.items(), columns=['Scenario', 'Net Effective Cost (Lakh ₹)'])
+            
+            fig_bar, ax_bar = plt.subplots(figsize=(10, 6))
+            sns.barplot(x='Scenario', y='Net Effective Cost (Lakh ₹)', data=cost_df, ax=ax_bar, palette='viridis')
+            ax_bar.set_title("Final Net Effective Cost by Scenario")
+            ax_bar.set_ylabel("Net Effective Cost (Lakh ₹)")
+            st.pyplot(fig_bar)
+
+            # Bar chart for final Total Project Outlay
+            st.subheader("Final Total Project Outlay Comparison")
+            final_outlays = {
+                'Scenario 1': results['scenario1']['total_project_outlay'],
+                'Scenario 2': results['scenario2']['total_project_outlay'],
+                'Scenario 3': results['scenario3']['total_project_outlay']
+            }
+            outlay_df = pd.DataFrame(final_outlays.items(), columns=['Scenario', 'Total Project Outlay (Lakh ₹)'])
+            
+            fig_outlay, ax_outlay = plt.subplots(figsize=(10, 6))
+            sns.barplot(x='Scenario', y='Total Project Outlay (Lakh ₹)', data=outlay_df, ax=ax_outlay, palette='plasma')
+            ax_outlay.set_title("Final Total Project Outlay by Scenario")
+            ax_outlay.set_ylabel("Total Project Outlay (Lakh ₹)")
+            st.pyplot(fig_outlay)
+
+            st.markdown("---")
+            st.header("5. Download Data")
+            
+            # Download DataFrame as CSV or Excel
+            csv_buffer = io.StringIO()
+            year_wise_df.to_csv(csv_buffer, index=False)
+            st.download_button(
+                label="Download Year-wise Data as CSV",
+                data=csv_buffer.getvalue(),
+                file_name="project_financing_year_wise_data.csv",
+                mime="text/csv",
+                key="download_csv"
+            )
+
+            excel_buffer = io.BytesIO()
+            with pd.ExcelWriter(excel_buffer, engine='xlsxwriter') as writer:
+                year_wise_df.to_excel(writer, sheet_name='Year-wise Data', index=False)
+                # You can add the summary results to another sheet
+                summary_data_for_excel = {
+                    "Scenario 1": results["scenario1"],
+                    "Scenario 2": results["scenario2"],
+                    "Scenario 3": results["scenario3"]
+                }
+                summary_df = pd.DataFrame.from_dict(summary_data_for_excel, orient='index')
+                # Filter out 'description' as it's just text
+                summary_df = summary_df.drop(columns=['description'], errors='ignore') 
+                summary_df.to_excel(writer, sheet_name='Summary Results')
+            
+            st.download_button(
+                label="Download Full Report as Excel",
+                data=excel_buffer.getvalue(),
+                file_name="project_financing_report.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                key="download_excel"
+            )
+
+            # Download PDF Report
+            pdf_buffer = calculator.generate_pdf_report(inputs, results, year_wise_df)
+            st.download_button(
+                label="Download Summary Report as PDF",
+                data=pdf_buffer,
+                file_name="project_financing_summary_report.pdf",
+                mime="application/pdf",
+                key="download_pdf"
+            )
+
+
+if __name__ == "__main__":
+    main()
